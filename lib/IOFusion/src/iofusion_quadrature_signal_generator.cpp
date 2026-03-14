@@ -1,8 +1,8 @@
-#include "encoder.h"
+#include "iofusion_quadrature_signal_generator.h"
 
-// Clean, instance-based implementation of EncoderGenerator.
+namespace IOFusion {
 
-bool EncoderGenerator::begin(uint8_t pinA, uint8_t pinB, uint8_t up, uint8_t down) {
+bool QuadratureSignalGenerator::begin(uint8_t pinA, uint8_t pinB, uint8_t up, uint8_t down) {
   if (pinA == pinB) return false;
   _pinA = pinA;
   _pinB = pinB;
@@ -15,8 +15,8 @@ bool EncoderGenerator::begin(uint8_t pinA, uint8_t pinB, uint8_t up, uint8_t dow
   _maskA = digitalPinToBitMask(_pinA);
   _maskB = digitalPinToBitMask(_pinB);
   if (portA == NOT_A_PIN || portB == NOT_A_PIN || _portAOut == nullptr || _portBOut == nullptr || _maskA == 0 || _maskB == 0) return false;
-  if (_portAOut) *_portAOut &= ~_maskA;
-  if (_portBOut) *_portBOut &= ~_maskB;
+  if (_portAOut) *_portAOut &= static_cast<uint8_t>(~_maskA);
+  if (_portBOut) *_portBOut &= static_cast<uint8_t>(~_maskB);
   _state = 0;
 
   _pinUp = up;
@@ -38,8 +38,7 @@ bool EncoderGenerator::begin(uint8_t pinA, uint8_t pinB, uint8_t up, uint8_t dow
   return true;
 }
 
-void EncoderGenerator::onTick() {
-  // Level-triggered sampling: if up is HIGH and down LOW -> step forward each tick
+void QuadratureSignalGenerator::onTick() {
   bool upHigh = (_upPortIn && ((*_upPortIn & _upMask) != 0));
   bool downHigh = (_downPortIn && ((*_downPortIn & _downMask) != 0));
   bool stepped = false;
@@ -53,44 +52,42 @@ void EncoderGenerator::onTick() {
     _state = (_state - 1) & 3;
     _position--;
     stepped = true;
-  } else {
-    // both low or both high: do nothing
   }
-  // write outputs once if a step occurred
   if (stepped) {
-    uint8_t s = _state;
+    uint8_t state = _state;
     if (_portAOut) {
-      if (s == 2 || s == 3) *_portAOut |= _maskA;
-      else *_portAOut &= ~_maskA;
+      if (state == 2 || state == 3) *_portAOut |= _maskA;
+      else *_portAOut &= static_cast<uint8_t>(~_maskA);
     }
     if (_portBOut) {
-      if (s == 1 || s == 2) *_portBOut |= _maskB;
-      else *_portBOut &= ~_maskB;
+      if (state == 1 || state == 2) *_portBOut |= _maskB;
+      else *_portBOut &= static_cast<uint8_t>(~_maskB);
     }
   }
 }
 
-int32_t EncoderGenerator::getPosition() {
+int32_t QuadratureSignalGenerator::getPosition() {
   noInterrupts();
-  int32_t v = _position;
+  int32_t value = _position;
   interrupts();
-  return v;
+  return value;
 }
 
-void EncoderGenerator::reset() {
+void QuadratureSignalGenerator::reset() {
   noInterrupts();
   _position = 0;
   _state = 0;
   _directionUp = true;
-  // set outputs to known idle (both LOW)
-  if (_portAOut) *_portAOut &= ~_maskA;
-  if (_portBOut) *_portBOut &= ~_maskB;
+  if (_portAOut) *_portAOut &= static_cast<uint8_t>(~_maskA);
+  if (_portBOut) *_portBOut &= static_cast<uint8_t>(~_maskB);
   interrupts();
 }
 
-bool EncoderGenerator::getDirection() {
+bool QuadratureSignalGenerator::getDirection() {
   noInterrupts();
-  bool d = _directionUp;
+  bool direction = _directionUp;
   interrupts();
-  return d;
+  return direction;
 }
+
+} // namespace IOFusion

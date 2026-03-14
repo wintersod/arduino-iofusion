@@ -1,9 +1,9 @@
 #include <unity.h>
 
 #include "Arduino.h"
-#include "analog.h"
-#include "digiin.h"
-#include "encoder.h"
+#include "iofusion_analog_sampler.h"
+#include "iofusion_digital_signal_meter.h"
+#include "iofusion_quadrature_signal_generator.h"
 
 namespace {
   void setDigitalPin(uint8_t pin, bool high) {
@@ -31,7 +31,7 @@ void setUp() {
 void tearDown() {}
 
 void test_analog_sampler_basic() {
-  AnalogSampler sampler;
+  IOFusion::AnalogSampler sampler;
   const uint8_t channels[] = {0, 1};
   TEST_ASSERT_TRUE(sampler.begin(channels, 2));
 
@@ -47,13 +47,13 @@ void test_analog_sampler_basic() {
 }
 
 void test_analog_sampler_invalid_channel() {
-  AnalogSampler sampler;
+  IOFusion::AnalogSampler sampler;
   const uint8_t channels[] = {6};
   TEST_ASSERT_FALSE(sampler.begin(channels, 1));
 }
 
 void test_digiin_frequency_and_duty() {
-  DigiIn digi;
+  IOFusion::DigitalSignalMeter digi;
   const uint8_t pins[] = {2};
   TEST_ASSERT_TRUE(digi.begin(pins, 1, 4, 1000.0f, false));
 
@@ -68,12 +68,12 @@ void test_digiin_frequency_and_duty() {
 
   digi.updateIfReady();
 
-  TEST_ASSERT_FLOAT_WITHIN(0.1f, 250.0f, digi.getFrequency(0));
-  TEST_ASSERT_FLOAT_WITHIN(0.1f, 50.0f, digi.getDutyCycle(0));
+  TEST_ASSERT_EQUAL_UINT32(2500, digi.getFrequencyDeciHz(0));
+  TEST_ASSERT_EQUAL_UINT16(500, digi.getDutyDeciPercent(0));
 }
 
 void test_encoder_generator_steps() {
-  EncoderGenerator enc;
+  IOFusion::QuadratureSignalGenerator enc;
   TEST_ASSERT_TRUE(enc.begin(9, 10, 2, 3));
 
   setDigitalPin(2, true);

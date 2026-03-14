@@ -1,0 +1,24 @@
+#ifndef IOFUSION_TEST_SUPPORT_H
+#define IOFUSION_TEST_SUPPORT_H
+
+#include <cstdint>
+
+void resetMockState();
+void setDigitalPin(uint8_t pin, bool high);
+
+void test_analog_sampler_basic();
+void test_analog_sampler_invalid_channel();
+void test_digital_signal_meter_frequency_and_duty();
+void test_quadrature_signal_generator_steps();
+void test_avr_timer1_pwm_begin_sets_timer_registers();
+void test_avr_timer1_pwm_set_duty_updates_compare_register();
+void test_avr_timer2_scheduler_begin_sets_ctc_registers();
+void test_avr_timer2_scheduler_callback_lifecycle();
+void test_serial_command_protocol_status_response_envelope();
+void test_serial_command_protocol_capabilities_response_lists_commands_and_pins();
+void test_serial_command_protocol_rejects_out_of_range_pwm_duty();
+void test_serial_command_protocol_analog_query_uses_response_envelope();
+void test_serial_command_protocol_digital_query_uses_compact_scaled_units();
+void test_serial_command_protocol_encoder_query_uses_compact_fields();
+
+#endif // IOFUSION_TEST_SUPPORT_H

@@ -1,39 +1,38 @@
-#include "timer.h"
+#include "iofusion_avr_timer2_scheduler.h"
 
-// Static member definitions
-volatile Timer2Callback Timer2Driver::_cbs[Timer2Driver::MAX_CALLBACKS] = { nullptr, nullptr, nullptr, nullptr };
+namespace IOFusion {
 
-Timer2Driver::Timer2Driver() {}
+volatile Timer2Callback AvrTimer2Scheduler::_cbs[AvrTimer2Scheduler::MAX_CALLBACKS] = { nullptr, nullptr, nullptr, nullptr };
 
-void Timer2Driver::clearCallbacks() {
+AvrTimer2Scheduler::AvrTimer2Scheduler() {}
+
+void AvrTimer2Scheduler::clearCallbacks() {
   for (uint8_t i = 0; i < MAX_CALLBACKS; ++i) {
     _cbs[i] = nullptr;
   }
 }
 
-uint16_t Timer2Driver::beginHz(float freqHz) {
-  if (freqHz <= 0) return 0;
-  // Stop timer2
+uint16_t AvrTimer2Scheduler::beginHz(uint32_t freqHz) {
+  if (freqHz == 0U) return 0;
   TCCR2A = 0;
   TCCR2B = 0;
-  TIMSK2 = 0; // disable interrupts
+  TIMSK2 = 0;
 
   noInterrupts();
   clearCallbacks();
   interrupts();
 
-  const uint32_t F_CPU32 = F_CPU;
-  // Timer2 is 8-bit; use CTC mode with OCR2A top (WGM21=1)
-  // Try prescalers to find OCR value within 0..255
+  const uint32_t cpuFreq = F_CPU;
   const uint16_t presVals[] = {1, 8, 32, 64, 128, 256, 1024};
-  uint16_t chosenOCR = 0;
+  uint16_t chosenOcr = 0;
   uint16_t chosenPres = 1;
   bool found = false;
-  for (uint8_t i = 0; i < sizeof(presVals)/sizeof(presVals[0]); ++i) {
-    float pres = static_cast<float>(presVals[i]);
-    float ocr = (F_CPU32 / (pres * freqHz)) - 1.0f;
-    if (ocr >= 0.0f && ocr <= 255.0f) {
-      chosenOCR = (uint16_t)(ocr + 0.5f);
+  for (uint8_t i = 0; i < sizeof(presVals) / sizeof(presVals[0]); ++i) {
+    uint32_t divisor = static_cast<uint32_t>(presVals[i]) * freqHz;
+    if (divisor == 0U) continue;
+    uint32_t counts = cpuFreq / divisor;
+    if (counts > 0U && counts <= 256U) {
+      chosenOcr = static_cast<uint16_t>(counts - 1U);
       chosenPres = presVals[i];
       found = true;
       break;
@@ -41,11 +40,9 @@ uint16_t Timer2Driver::beginHz(float freqHz) {
   }
   if (!found) return 0;
 
-  // Configure CTC mode
   TCCR2A = _BV(WGM21);
-  // Set OCR
-  OCR2A = (uint8_t)chosenOCR;
-  // Set prescaler bits
+  OCR2A = static_cast<uint8_t>(chosenOcr);
+
   uint8_t csbits = 0;
   switch (chosenPres) {
     case 1: csbits = _BV(CS20); break;
@@ -58,22 +55,20 @@ uint16_t Timer2Driver::beginHz(float freqHz) {
     default: csbits = _BV(CS20); break;
   }
   TCCR2B = csbits;
-
-  // enable compare match A interrupt
   TIMSK2 |= _BV(OCIE2A);
-  return (uint16_t)chosenOCR;
+  return chosenOcr;
 }
 
-void Timer2Driver::stop() {
+void AvrTimer2Scheduler::stop() {
   noInterrupts();
-  TIMSK2 &= ~_BV(OCIE2A);
+  TIMSK2 &= static_cast<uint8_t>(~_BV(OCIE2A));
   TCCR2A = 0;
   TCCR2B = 0;
   clearCallbacks();
   interrupts();
 }
 
-bool Timer2Driver::attachCallback(Timer2Callback cb) {
+bool AvrTimer2Scheduler::attachCallback(Timer2Callback cb) {
   if (cb == nullptr) return false;
   noInterrupts();
   for (uint8_t i = 0; i < MAX_CALLBACKS; ++i) {
@@ -93,7 +88,7 @@ bool Timer2Driver::attachCallback(Timer2Callback cb) {
   return false;
 }
 
-void Timer2Driver::detachCallback(Timer2Callback cb) {
+void AvrTimer2Scheduler::detachCallback(Timer2Callback cb) {
   noInterrupts();
   for (uint8_t i = 0; i < MAX_CALLBACKS; ++i) {
     if (_cbs[i] == cb) {
@@ -104,18 +99,15 @@ void Timer2Driver::detachCallback(Timer2Callback cb) {
   interrupts();
 }
 
-// No isSampleDue() flag — use attachCallback() for ISR work.
-
-// ISR for Timer2 Compare Match A
-ISR(TIMER2_COMPA_vect) {
-  // call callback if present
-  Timer2Driver::handleInterrupt();
-  // encoder tick should be attached via Timer2Driver::attachCallback()
-}
-
-void Timer2Driver::handleInterrupt() {
+void AvrTimer2Scheduler::handleInterrupt() {
   for (uint8_t i = 0; i < MAX_CALLBACKS; ++i) {
     Timer2Callback cb = _cbs[i];
     if (cb) cb();
   }
+}
+
+} // namespace IOFusion
+
+ISR(TIMER2_COMPA_vect) {
+  IOFusion::AvrTimer2Scheduler::handleInterrupt();
 }

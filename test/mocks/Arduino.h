@@ -8,6 +8,10 @@
 #include <sstream>
 #include <iomanip>
 
+#ifndef F_CPU
+#define F_CPU 16000000UL
+#endif
+
 #define F(x) x
 #define PROGMEM
 
@@ -20,7 +24,28 @@
 #define _BV(bit) (1U << (bit))
 #endif
 
-inline void pinMode(uint8_t, uint8_t) {}
+#define ISR(vector) void vector(void)
+
+#define CS10 0
+#define CS11 1
+#define CS12 2
+#define WGM11 3
+#define WGM12 4
+#define WGM13 5
+#define COM1A1 6
+#define COM1B1 7
+#define WGM21 1
+#define CS20 0
+#define CS21 1
+#define CS22 2
+#define OCIE2A 3
+
+extern uint8_t mockPinModes[64];
+
+inline void pinMode(uint8_t pin, uint8_t mode) {
+  if (pin < 64) mockPinModes[pin] = mode;
+}
+
 inline void noInterrupts() {}
 inline void interrupts() {}
 inline void delayMicroseconds(unsigned int) {}
@@ -32,6 +57,16 @@ inline void advanceMillis(unsigned long deltaMs) { mockMillis += deltaMs; }
 extern uint8_t mockPortIn[8];
 extern uint8_t mockPortOut[8];
 extern int mockAnalogValues[16];
+extern uint8_t TCCR1A;
+extern uint8_t TCCR1B;
+extern uint8_t TCCR2A;
+extern uint8_t TCCR2B;
+extern uint8_t TIMSK2;
+extern uint8_t OCR2A;
+extern uint16_t OCR1A;
+extern uint16_t OCR1B;
+extern uint16_t ICR1;
+extern uint16_t TCNT1;
 
 inline uint8_t digitalPinToPort(uint8_t pin) {
   if (pin >= 64) return NOT_A_PIN;

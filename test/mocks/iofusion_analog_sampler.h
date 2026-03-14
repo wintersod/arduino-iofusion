@@ -1,7 +1,9 @@
-#ifndef MOCK_ANALOG_H
-#define MOCK_ANALOG_H
+#ifndef MOCK_IOFUSION_ANALOG_SAMPLER_H
+#define MOCK_IOFUSION_ANALOG_SAMPLER_H
 
 #include <cstdint>
+
+namespace IOFusion {
 
 class AnalogSampler {
 public:
@@ -25,4 +27,6 @@ private:
   uint8_t _count = 0;
 };
 
-#endif // MOCK_ANALOG_H
+} // namespace IOFusion
+
+#endif // MOCK_IOFUSION_ANALOG_SAMPLER_H

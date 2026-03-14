@@ -1,23 +1,25 @@
 // Simple quadrature encoder signal generator
-#ifndef IOFUSION_ENCODER_H
-#define IOFUSION_ENCODER_H
+#ifndef IOFUSION_QUADRATURE_SIGNAL_GENERATOR_H
+#define IOFUSION_QUADRATURE_SIGNAL_GENERATOR_H
 
 #include <Arduino.h>
 
-class EncoderGenerator {
+namespace IOFusion {
+
+// Generates a quadrature-style output from two level inputs. This is not a decoder.
+class QuadratureSignalGenerator {
 public:
-	// Initialize generator pins and frequency. Returns true on success.
+	// pinA/pinB are outputs, up/down are sampled control inputs.
 	bool begin(uint8_t pinA, uint8_t pinB, uint8_t up, uint8_t down);
-	// Called from ISR to advance the quadrature state and write outputs.
+	// ISR-side state advance and output update.
 	void onTick();
 
 	int32_t getPosition();
 	bool getDirection();
-	// Reset position to initial state (0)
+	// Resets position and drives both outputs LOW.
 	void reset();
 
 private:
-	// Instance state
 	uint8_t _pinA = 255;
 	uint8_t _pinB = 255;
 	uint8_t _state = 0;
@@ -35,6 +37,6 @@ private:
 	volatile bool _directionUp = true;
 };
 
-// No global instance here — create an instance in your `main.cpp` as needed.
+} // namespace IOFusion
 
-#endif // IOFUSION_ENCODER_H
+#endif // IOFUSION_QUADRATURE_SIGNAL_GENERATOR_H

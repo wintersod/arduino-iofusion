@@ -6,24 +6,24 @@ Basic PlatformIO project targeting the Arduino Uno (ATmega328P).
 
 IOFusion is a small set of hardware helpers focused on deterministic, timer-driven sampling and signal generation:
 
-- `Timer2Driver` provides a periodic ISR tick for scheduling fast tasks.
+- `AvrTimer2Scheduler` provides a periodic ISR tick for scheduling fast tasks.
 - `AnalogSampler` defers ADC reads to `loop()` while the ISR only sets a flag.
-- `DigiIn` samples digital inputs in the ISR and computes frequency/duty in `loop()`.
-- `EncoderGenerator` produces a quadrature output and tracks position/direction.
-- `Timer1PWM` configures Timer1 PWM on OC1A/OC1B (pins 9/10).
+- `DigitalSignalMeter` samples digital inputs in the ISR and computes frequency/duty in `loop()`.
+- `QuadratureSignalGenerator` produces a quadrature output and tracks position/direction.
+- `AvrTimer1Pwm` configures Timer1 PWM on OC1A/OC1B (pins 9/10).
 
 ### Encoder generator semantics
 
-`EncoderGenerator` is a **signal generator** driven by two level inputs (`up`, `down`). It advances one quadrature step per tick when `up` is HIGH and `down` is LOW, and steps backward when `down` is HIGH and `up` is LOW. It does **not** decode a physical quadrature encoder.
+`QuadratureSignalGenerator` is a **signal generator** driven by two level inputs (`up`, `down`). It advances one quadrature step per tick when `up` is HIGH and `down` is LOW, and steps backward when `down` is HIGH and `up` is LOW. It does **not** decode a physical quadrature encoder.
 
 ### Data flow
 
 
 ```mermaid
 flowchart TD
-    T2[Timer2Driver ISR] --> AS[AnalogSampler flag]
-    T2 --> DI[DigiIn counters]
-    T2 --> EN[EncoderGenerator state]
+    T2[AvrTimer2Scheduler ISR] --> AS[AnalogSampler flag]
+    T2 --> DI[DigitalSignalMeter counters]
+    T2 --> EN[QuadratureSignalGenerator state]
 
     LOOP[loop] --> AS
     LOOP --> DI
@@ -56,31 +56,62 @@ To keep measurements accurate, `loop()` should run frequently. If the loop stall
 - Library headers: [lib/IOFusion/include](lib/IOFusion/include)
 - Library sources: [lib/IOFusion/src](lib/IOFusion/src)
 - Firmware entry: [src/main.cpp](src/main.cpp)
-- Command line interface: [src/cmdline.h](src/cmdline.h) and [src/cmdline.cpp](src/cmdline.cpp)
+- Serial command protocol: [src/serial_command_protocol.h](src/serial_command_protocol.h) and [src/serial_command_protocol.cpp](src/serial_command_protocol.cpp)
+- Active native unit tests: [test/iofusion](test/iofusion)
+
+### Top-level runtime structure
+
+The firmware entry point uses one static `FirmwareRuntime` composition root in [src/main.cpp](src/main.cpp). Board wiring and defaults are grouped into small static config structs (`PinMapConfig`, `EncoderConfig`, `TimingConfig`, `PwmConfig`, `RuntimeConfig`), and runtime module state is grouped in `ModuleHealth`.
+
+This keeps the top level explicit without adding heap allocation, virtual dispatch, or other abstractions that are expensive on the ATmega328P.
 
 ## Command line interface
 
-The firmware exposes a simple serial command line for querying sensors and controlling PWM. Commands are ASCII and return versioned JSON responses.
+The firmware exposes a simple serial command line for querying sensors and controlling PWM. Commands are ASCII and are compact by default for machine-to-machine use on AVR. A more verbose debug protocol can be enabled at build time with `-DIOFUSION_PROTOCOL_DEBUG=1`.
 
-Response envelope:
+Default compact response style:
 
-- Success: `{"api":"1","status":"ok","data":{...}}`
-- Error: `{"api":"1","status":"error","error":{"code":"...","message":"..."}}`
+- Success responses are terse payload objects such as `{"mv":[2502]}` or `{"ok":"pwm-duty"}`
+- Error responses are compact objects such as `{"err":"invalid_frequency"}`
+
+Debug response style with `IOFUSION_PROTOCOL_DEBUG=1`:
+
+- Analog success: `{"api":"1","status":"ok","data":{"mv":[2502]}}`
+- Digital success: `{"api":"1","status":"ok","data":{"f_dhz":[2500],"d_dpct":[500]}}`
+- Status success: `{"api":"1","status":"ok","data":{"modules":{"analog":true,"digital":true,"encoder":true,"pwm":true,"timer2":true},"counts":{"analog":1,"digital":1}}}`
+- Error: `{"api":"1","status":"error","error":{"code":"invalid_frequency","message":"frequency must be 1..1000000 hz"}}`
 
 Supported commands:
 
-- `analog?` — returns analog voltages for configured channels.
-- `digital?` — returns frequency and duty cycle for configured digital inputs.
-- `encoder?` — returns encoder direction and position.
-- `pwm-freq <hz>` — sets Timer1 PWM frequency.
-- `pwm-duty <ch> <pct>` — sets PWM duty for channel 0 or 1.
-- `status` — returns module initialization health and channel counts.
-- `capabilities` — returns command list and static interface capabilities.
+- `analog?` — returns analog samples in millivolts as a compact ordered array (`mv`).
+- `digital?` — returns frequency in deci-Hz and duty in tenths of a percent as compact ordered arrays.
+- `encoder?` — returns compact encoder state.
+- `pwm-freq <hz>` — sets Timer1 PWM frequency in integer Hz.
+- `pwm-duty <ch> <pct>` — sets PWM duty for channel 0 or 1 using integer percent.
+- `status` — returns compact module health and channel counts.
+- `capabilities` — returns compact command list, unit metadata, and pin capabilities.
 - `help` — prints a short help string.
+
+High-rate sensor responses use compact integer units to reduce serial traffic and avoid float formatting overhead on AVR:
+
+- `analog?` payload: `mv` in millivolts, ordered by configured analog pin list
+- `digital?` payload: `f` in $0.1\,\text{Hz}$ and `d` in $0.1\%$, ordered by configured digital pin list
+- `encoder?` payload: `e` as `[dir, pos]` where `dir` is `1` for up and `0` for down
+- `status` payload: `m` as `[analog,digital,encoder,pwm,timer]` and `c` as `[analogCount,digitalCount]`
+- `capabilities` payload: `cmd` command list, `u` unit list, `p` PWM summary, `a` analog pins, `d` digital pins
+
+Debug builds keep the same integer units, but use longer field names inside the response envelope: `mv`, `f_dhz`, `d_dpct`, `dir`, `pos`, `modules`, `counts`, `commands`, `units`, `pwm`, and `pins`.
+
+Examples:
+
+- `analog?` response: `{"mv":[2502,5000]}`
+- `digital?` response: `{"f":[2500],"d":[500]}`
+- `encoder?` response: `{"e":[1,42]}`
+- `pwm-duty 0 50` response: `{"ok":"pwm-duty"}`
 
 #### Error reporting
 
-Initialization failures are reported as JSON errors on Serial (e.g., `{"error":"pwm init failed"}`) to aid diagnosis.
+Initialization failures during startup are still printed as simple JSON error objects on Serial (for example, `{"error":"pwm init failed"}`) before the command protocol is active.
 
 ## Build and upload
 
@@ -99,6 +130,14 @@ pio run --target upload
 ## Unit tests and coverage
 
 Host-based unit tests (IOFusion library) run under a native build with mocked Arduino APIs:
+
+- Test support and Unity runner: [test/iofusion/test_support.h](test/iofusion/test_support.h), [test/iofusion/test_support.cpp](test/iofusion/test_support.cpp), and [test/iofusion/test_main.cpp](test/iofusion/test_main.cpp)
+- Analog sampler tests: [test/iofusion/test_iofusion_analog_sampler.cpp](test/iofusion/test_iofusion_analog_sampler.cpp)
+- Digital signal meter tests: [test/iofusion/test_iofusion_digital_signal_meter.cpp](test/iofusion/test_iofusion_digital_signal_meter.cpp)
+- Quadrature signal generator tests: [test/iofusion/test_iofusion_quadrature_signal_generator.cpp](test/iofusion/test_iofusion_quadrature_signal_generator.cpp)
+- Timer1 PWM tests: [test/iofusion/test_iofusion_avr_timer1_pwm.cpp](test/iofusion/test_iofusion_avr_timer1_pwm.cpp)
+- Timer2 scheduler tests: [test/iofusion/test_iofusion_avr_timer2_scheduler.cpp](test/iofusion/test_iofusion_avr_timer2_scheduler.cpp)
+- Serial command protocol tests: [test/iofusion/test_serial_command_protocol.cpp](test/iofusion/test_serial_command_protocol.cpp)
 
 - Windows: run [tools/coverage.ps1](tools/coverage.ps1)
 - Linux/macOS: run [tools/coverage.sh](tools/coverage.sh)

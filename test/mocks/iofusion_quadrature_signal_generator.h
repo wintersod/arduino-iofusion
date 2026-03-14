@@ -1,11 +1,13 @@
-#ifndef MOCK_ENCODER_H
-#define MOCK_ENCODER_H
+#ifndef MOCK_IOFUSION_QUADRATURE_SIGNAL_GENERATOR_H
+#define MOCK_IOFUSION_QUADRATURE_SIGNAL_GENERATOR_H
 
 #include <cstdint>
 
-class EncoderGenerator {
+namespace IOFusion {
+
+class QuadratureSignalGenerator {
 public:
-  EncoderGenerator() = default;
+  QuadratureSignalGenerator() = default;
 
   void setState(int32_t position, bool directionUp) {
     _position = position;
@@ -20,4 +22,6 @@ private:
   bool _directionUp = true;
 };
 
-#endif // MOCK_ENCODER_H
+} // namespace IOFusion
+
+#endif // MOCK_IOFUSION_QUADRATURE_SIGNAL_GENERATOR_H
