@@ -34,6 +34,7 @@ namespace {
   struct TimingConfig {
     uint32_t timerTickHz;
     uint16_t digitalWindowTicks;
+    uint16_t analogRefreshPeriodMs;
   };
 
   /** @brief Default PWM configuration applied during startup. */
@@ -67,7 +68,7 @@ namespace {
     {kAnalogPins, static_cast<uint8_t>(sizeof(kAnalogPins) / sizeof(kAnalogPins[0])),
      kDigitalPins, static_cast<uint8_t>(sizeof(kDigitalPins) / sizeof(kDigitalPins[0]))},
     {4, 5, 6, 7},
-    {10000U, 500},
+    {10000U, 500, 100},
     {100U, 50U, 25U},
   };
 
@@ -89,6 +90,10 @@ namespace {
 
     /** @brief Initializes peripherals, protocol state, and timer-driven modules. */
     void setup() {
+      _analogRefreshTicks = computeAnalogRefreshTicks(
+        _config.timing.timerTickHz,
+        _config.timing.analogRefreshPeriodMs);
+
       Serial.begin(115200);
       delay(100);
       Serial.print("Firmware version: ");
@@ -123,7 +128,7 @@ namespace {
         _timer1Pwm.setDuty(1, _config.pwm.channel1DutyPercent);
       }
 
-      _health.timer = _timer2Scheduler.beginHz(_config.timing.timerTickHz) > 0;
+      _health.timer = _timer2Scheduler.beginHz(_config.timing.timerTickHz);
       if (_health.timer) {
         _health.timer = _timer2Scheduler.attachCallback(timerTickHandler);
       }
@@ -143,12 +148,26 @@ namespace {
 
     /** @brief Timer2 ISR trampoline target used to fan out periodic work. */
     void onTimerTickIsr() {
-      if (_health.analog) _analogSampler.onTick();
+      if (_health.analog) {
+        ++_analogRefreshTickCounter;
+        if (_analogRefreshTickCounter >= _analogRefreshTicks) {
+          _analogRefreshTickCounter = 0;
+          _analogSampler.onTick();
+        }
+      }
       if (_health.digital) _digitalSignalMeter.onTick();
       if (_health.encoder) _quadratureGenerator.onTick();
     }
 
   private:
+    static uint16_t computeAnalogRefreshTicks(uint32_t tickHz, uint16_t refreshPeriodMs) {
+      if (tickHz == 0U || refreshPeriodMs == 0U) return 1U;
+      uint32_t ticks = (tickHz * static_cast<uint32_t>(refreshPeriodMs) + 999U) / 1000U;
+      if (ticks == 0U) return 1U;
+      if (ticks > 65535U) return 65535U;
+      return static_cast<uint16_t>(ticks);
+    }
+
     void refreshProtocolStatus() {
       _cmdProtocol.setModuleStatus(
         _health.analog,
@@ -166,6 +185,8 @@ namespace {
     IOFusion::AvrTimer1Pwm _timer1Pwm;
     IOFusion::SerialCommandProtocol _cmdProtocol;
     ModuleHealth _health;
+    uint16_t _analogRefreshTicks = 1U;
+    uint16_t _analogRefreshTickCounter = 0U;
   };
 
   FirmwareRuntime runtime(kRuntimeConfig);

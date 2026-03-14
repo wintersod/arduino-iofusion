@@ -75,8 +75,20 @@ void AvrTimer1Pwm::stop() {
   OCR1A = 0;
   OCR1B = 0;
   interrupts();
-  pinMode(9, INPUT);
-  pinMode(10, INPUT);
+  pinMode(9, OUTPUT);
+  pinMode(10, OUTPUT);
+  uint8_t portA = digitalPinToPort(9);
+  uint8_t portB = digitalPinToPort(10);
+  volatile uint8_t* portAOut = portOutputRegister(portA);
+  volatile uint8_t* portBOut = portOutputRegister(portB);
+  uint8_t maskA = digitalPinToBitMask(9);
+  uint8_t maskB = digitalPinToBitMask(10);
+  if (portA != NOT_A_PIN && portAOut != nullptr && maskA != 0) {
+    *portAOut &= static_cast<uint8_t>(~maskA);
+  }
+  if (portB != NOT_A_PIN && portBOut != nullptr && maskB != 0) {
+    *portBOut &= static_cast<uint8_t>(~maskB);
+  }
   _top = 0;
   _presBits = 0;
   _frequencyHz = 0;

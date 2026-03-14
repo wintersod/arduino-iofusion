@@ -20,9 +20,10 @@ public:
 	/**
 	 * @brief Starts Timer2 in CTC mode.
 	 * @param freqHz Target callback frequency in hertz.
-	 * @return OCR2A compare value used for the chosen prescaler, or `0` on failure.
+	 * @retval true Timer2 was configured successfully.
+	 * @retval false The requested frequency cannot be represented by the Timer2 prescaler/OCR2A combination.
 	 */
-	uint16_t beginHz(uint32_t freqHz);
+	bool beginHz(uint32_t freqHz);
 	/** @brief Stops Timer2 and clears all registered callbacks. */
 	void stop();
 	/**

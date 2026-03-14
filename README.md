@@ -10,7 +10,7 @@ IOFusion is a small set of hardware helpers focused on small-footprint, timer-dr
 - `AnalogSampler` defers ADC reads to `loop()` while the ISR only sets a flag.
 - `DigitalSignalMeter` samples digital inputs in the ISR and computes frequency/duty in `loop()`.
 - `QuadratureSignalGenerator` produces a quadrature output and tracks position/direction.
-- `AvrTimer1Pwm` configures Timer1 PWM on OC1A/OC1B (pins 9/10).
+- `AvrTimer1Pwm` configures Timer1 PWM on OC1A/OC1B (pins 9/10) and drives both outputs low when stopped.
 
 ### Encoder generator semantics
 
@@ -51,6 +51,10 @@ To keep measurements accurate, `loop()` should run frequently. If the loop stall
 
 The analog subsystem is intentionally best-effort rather than fixed-rate. Timer ticks only request a refresh, and `loop()` performs ADC work whenever time is available. If multiple ticks arrive while the CPU is busy, those requests are coalesced and only the latest completed analog snapshot is retained.
 
+In the default firmware configuration, the Timer2 base tick remains `10 kHz` for digital measurement and generator timing, but analog refresh requests are decimated to one request every `100 ms`. This keeps ADC work aligned with the actual freshness requirement instead of requesting unsustainable full-channel refreshes on every timer tick.
+
+At boot, analog values are not refreshed immediately. Hosts should allow for the firmware startup delay plus the first analog refresh interval before treating `analog?` data as fresh. With the default configuration, that means analog readings can remain at their initial zero state for roughly the first `100 ms` after startup.
+
 #### Analog reference voltage
 
 `AnalogSampler` scales readings using a configurable reference voltage (default 5.0V). If your board uses a different $V_{ref}$, prefer `analogSampler.setVrefMillivolts(<mV>)` at startup after `begin()`. The float-based helper remains available, but the integer API is the better fit for AVR targets.
@@ -68,6 +72,10 @@ The analog subsystem is intentionally best-effort rather than fixed-rate. Timer 
 The firmware entry point uses one static `FirmwareRuntime` composition root in [src/main.cpp](src/main.cpp). Board wiring and defaults are grouped into small static config structs (`PinMapConfig`, `EncoderConfig`, `TimingConfig`, `PwmConfig`, `RuntimeConfig`), and runtime module state is grouped in `ModuleHealth`.
 
 This keeps the top level explicit without adding heap allocation, virtual dispatch, or other abstractions that are expensive on the ATmega328P.
+
+`TimingConfig` now separates the fast Timer2 base rate from the analog refresh cadence, so digital edge timing can stay fast while analog updates are intentionally limited to a realistic freshness target.
+
+Timer2 scheduler setup is reported as explicit success or failure. The implementation no longer treats `OCR2A = 0` as an error, because that is a valid compare value for the highest representable Timer2 rate.
 
 ## Command line interface
 
@@ -102,6 +110,8 @@ High-rate sensor responses use compact integer units to reduce serial traffic an
 - `analog?` payload: `mv` in millivolts, ordered by configured analog pin list
 - `digital?` payload: `f` in $0.1\,\text{Hz}$ and `d` in $0.1\%$, ordered by configured digital pin list
 - `encoder?` payload: `e` as `[dir, pos]` where `dir` is `1` for up and `0` for down
+
+`analog?` reports the latest completed snapshot. Immediately after boot, that snapshot may still be the initial zero-filled state until the first scheduled analog refresh completes.
 
 `encoder?` is a compact status query. The two values are read separately and are not documented as a transactional snapshot.
 - `status` payload: `m` as `[analog,digital,encoder,pwm,timer]` and `c` as `[analogCount,digitalCount]`

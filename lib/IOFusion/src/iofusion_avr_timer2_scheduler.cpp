@@ -16,8 +16,8 @@ void AvrTimer2Scheduler::clearCallbacks() {
   }
 }
 
-uint16_t AvrTimer2Scheduler::beginHz(uint32_t freqHz) {
-  if (freqHz == 0U) return 0;
+bool AvrTimer2Scheduler::beginHz(uint32_t freqHz) {
+  if (freqHz == 0U) return false;
   TCCR2A = 0;
   TCCR2B = 0;
   TIMSK2 = 0;
@@ -42,7 +42,7 @@ uint16_t AvrTimer2Scheduler::beginHz(uint32_t freqHz) {
       break;
     }
   }
-  if (!found) return 0;
+  if (!found) return false;
 
   TCCR2A = _BV(WGM21);
   OCR2A = static_cast<uint8_t>(chosenOcr);
@@ -60,7 +60,7 @@ uint16_t AvrTimer2Scheduler::beginHz(uint32_t freqHz) {
   }
   TCCR2B = csbits;
   TIMSK2 |= _BV(OCIE2A);
-  return chosenOcr;
+  return true;
 }
 
 void AvrTimer2Scheduler::stop() {

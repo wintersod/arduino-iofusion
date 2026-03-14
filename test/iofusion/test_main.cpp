@@ -13,7 +13,9 @@ int main(int argc, char** argv) {
   RUN_TEST(test_quadrature_signal_generator_steps_backward_on_active_high_down);
   RUN_TEST(test_avr_timer1_pwm_begin_sets_timer_registers);
   RUN_TEST(test_avr_timer1_pwm_set_duty_updates_compare_register);
+  RUN_TEST(test_avr_timer1_pwm_stop_drives_outputs_low);
   RUN_TEST(test_avr_timer2_scheduler_begin_sets_ctc_registers);
+  RUN_TEST(test_avr_timer2_scheduler_begin_accepts_valid_zero_ocr);
   RUN_TEST(test_avr_timer2_scheduler_callback_lifecycle);
   RUN_TEST(test_serial_command_protocol_status_response_envelope);
   RUN_TEST(test_serial_command_protocol_capabilities_response_lists_commands_and_pins);

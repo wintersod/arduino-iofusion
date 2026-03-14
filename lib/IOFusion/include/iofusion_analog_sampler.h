@@ -14,6 +14,8 @@ namespace IOFusion {
  *
  * Multiple ISR requests are intentionally coalesced into one pending refresh so the
  * analog subsystem always publishes the latest available snapshot within the loop budget.
+ * During boot, readings remain at their initialized state until the first scheduled
+ * refresh request is serviced from loop context.
  */
 class AnalogSampler {
 public:

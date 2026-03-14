@@ -24,3 +24,20 @@ void test_avr_timer1_pwm_set_duty_updates_compare_register() {
   TEST_ASSERT_EQUAL_UINT16(10000, OCR1A);
   TEST_ASSERT_EQUAL_UINT16(5000, OCR1B);
 }
+
+void test_avr_timer1_pwm_stop_drives_outputs_low() {
+  IOFusion::AvrTimer1Pwm pwm;
+
+  TEST_ASSERT_TRUE(pwm.begin(100));
+  mockPortOut[digitalPinToPort(9)] |= digitalPinToBitMask(9);
+  mockPortOut[digitalPinToPort(10)] |= digitalPinToBitMask(10);
+
+  pwm.stop();
+
+  TEST_ASSERT_EQUAL_UINT8(OUTPUT, mockPinModes[9]);
+  TEST_ASSERT_EQUAL_UINT8(OUTPUT, mockPinModes[10]);
+  TEST_ASSERT_EQUAL_UINT16(0, OCR1A);
+  TEST_ASSERT_EQUAL_UINT16(0, OCR1B);
+  TEST_ASSERT_EQUAL_UINT8(0, mockPortOut[digitalPinToPort(9)] & digitalPinToBitMask(9));
+  TEST_ASSERT_EQUAL_UINT8(0, mockPortOut[digitalPinToPort(10)] & digitalPinToBitMask(10));
+}

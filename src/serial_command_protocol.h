@@ -23,7 +23,8 @@ namespace IOFusion {
  *
  * High-rate responses use integer engineering units to reduce AVR serial and formatting
  * overhead. Encoder responses report current direction and position as lightweight status
- * fields, not as a guaranteed atomic snapshot pair.
+ * fields, not as a guaranteed atomic snapshot pair. Analog responses return the latest
+ * completed snapshot, which may still be the initialized state during early startup.
  */
 class SerialCommandProtocol {
 public:

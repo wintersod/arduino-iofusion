@@ -27,7 +27,7 @@ public:
 	 * @param percent Duty cycle in integer percent. Values above `100` are clamped.
 	 */
 	void setDuty(uint8_t channel, uint8_t percent);
-	/** @brief Stops PWM output and releases the Timer1 output pins. */
+	/** @brief Stops PWM output and drives both Timer1 output pins low. */
 	void stop();
 
 private:
