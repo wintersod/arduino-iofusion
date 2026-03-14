@@ -2,8 +2,22 @@
 
 #include "Arduino.h"
 #include "analog.h"
+#include "cmdline.h"
 #include "digiin.h"
 #include "encoder.h"
+#include "pwm.h"
+
+Timer1PWM::Timer1PWM() {}
+
+bool Timer1PWM::begin(float freqHz) {
+  return freqHz > 0.0f;
+}
+
+void Timer1PWM::setDuty(uint8_t, float) {}
+
+void Timer1PWM::stop() {}
+
+#include "../../src/cmdline.cpp"
 
 namespace {
   void setDigitalPin(uint8_t pin, bool high) {
@@ -26,6 +40,8 @@ void setUp() {
   mockMillis = 0;
   for (int i = 0; i < 16; ++i) mockAnalogValues[i] = 0;
   clearPorts();
+  Serial.clearOutput();
+  Serial.setInput("");
 }
 
 void tearDown() {}
@@ -86,6 +102,105 @@ void test_encoder_generator_steps() {
   TEST_ASSERT_TRUE(enc.getDirection());
 }
 
+void test_cmdline_status_response_envelope() {
+  AnalogSampler analog;
+  DigiIn digi;
+  EncoderGenerator encoder;
+  Timer1PWM pwm;
+  const uint8_t analogPins[] = {0, 1};
+  const uint8_t digitalPins[] = {2, 3};
+
+  TEST_ASSERT_TRUE(analog.begin(analogPins, 2));
+  TEST_ASSERT_TRUE(digi.begin(digitalPins, 2, 4, 1000.0f, false));
+  TEST_ASSERT_TRUE(encoder.begin(9, 10, 4, 5));
+
+  CmdLine cmd(analog, digi, encoder, pwm, analogPins, 2, digitalPins, 2);
+  cmd.setModuleStatus(true, false, true, true, false);
+
+  Serial.setInput("status\n");
+  cmd.processSerial();
+
+  const std::string& output = Serial.getOutput();
+  TEST_ASSERT_NOT_EQUAL(std::string::npos, output.find("\"api\":\"1\""));
+  TEST_ASSERT_NOT_EQUAL(std::string::npos, output.find("\"status\":\"ok\""));
+  TEST_ASSERT_NOT_EQUAL(std::string::npos, output.find("\"analog\":true"));
+  TEST_ASSERT_NOT_EQUAL(std::string::npos, output.find("\"digital\":false"));
+  TEST_ASSERT_NOT_EQUAL(std::string::npos, output.find("\"timer2\":false"));
+  TEST_ASSERT_NOT_EQUAL(std::string::npos, output.find("\"counts\":{\"analog\":2,\"digital\":2}"));
+}
+
+void test_cmdline_capabilities_response_lists_commands_and_pins() {
+  AnalogSampler analog;
+  DigiIn digi;
+  EncoderGenerator encoder;
+  Timer1PWM pwm;
+  const uint8_t analogPins[] = {0, 1, 2};
+  const uint8_t digitalPins[] = {8, 11};
+
+  TEST_ASSERT_TRUE(analog.begin(analogPins, 3));
+  TEST_ASSERT_TRUE(digi.begin(digitalPins, 2, 4, 1000.0f, false));
+  TEST_ASSERT_TRUE(encoder.begin(9, 10, 4, 5));
+
+  CmdLine cmd(analog, digi, encoder, pwm, analogPins, 3, digitalPins, 2);
+
+  Serial.setInput("capabilities\n");
+  cmd.processSerial();
+
+  const std::string& output = Serial.getOutput();
+  TEST_ASSERT_NOT_EQUAL(std::string::npos, output.find("\"commands\":[\"analog?\",\"digital?\",\"encoder?\",\"pwm-freq\",\"pwm-duty\",\"status\",\"capabilities\",\"help\"]"));
+  TEST_ASSERT_NOT_EQUAL(std::string::npos, output.find("\"analog\":[0,1,2]"));
+  TEST_ASSERT_NOT_EQUAL(std::string::npos, output.find("\"digital\":[8,11]"));
+  TEST_ASSERT_NOT_EQUAL(std::string::npos, output.find("\"duty_range_pct\":[0,100]"));
+}
+
+void test_cmdline_rejects_out_of_range_pwm_duty() {
+  AnalogSampler analog;
+  DigiIn digi;
+  EncoderGenerator encoder;
+  Timer1PWM pwm;
+  const uint8_t analogPins[] = {0};
+  const uint8_t digitalPins[] = {2};
+
+  TEST_ASSERT_TRUE(analog.begin(analogPins, 1));
+  TEST_ASSERT_TRUE(digi.begin(digitalPins, 1, 4, 1000.0f, false));
+  TEST_ASSERT_TRUE(encoder.begin(9, 10, 4, 5));
+
+  CmdLine cmd(analog, digi, encoder, pwm, analogPins, 1, digitalPins, 1);
+
+  Serial.setInput("pwm-duty 0 101\n");
+  cmd.processSerial();
+
+  const std::string& output = Serial.getOutput();
+  TEST_ASSERT_NOT_EQUAL(std::string::npos, output.find("\"status\":\"error\""));
+  TEST_ASSERT_NOT_EQUAL(std::string::npos, output.find("\"code\":\"duty_out_of_range\""));
+}
+
+void test_cmdline_analog_query_uses_response_envelope() {
+  AnalogSampler analog;
+  DigiIn digi;
+  EncoderGenerator encoder;
+  Timer1PWM pwm;
+  const uint8_t analogPins[] = {0};
+  const uint8_t digitalPins[] = {2};
+
+  TEST_ASSERT_TRUE(analog.begin(analogPins, 1));
+  TEST_ASSERT_TRUE(digi.begin(digitalPins, 1, 4, 1000.0f, false));
+  TEST_ASSERT_TRUE(encoder.begin(9, 10, 4, 5));
+
+  mockAnalogValues[0] = 512;
+  analog.onTick();
+  analog.sampleIfDue();
+
+  CmdLine cmd(analog, digi, encoder, pwm, analogPins, 1, digitalPins, 1);
+
+  Serial.setInput("analog?\n");
+  cmd.processSerial();
+
+  const std::string& output = Serial.getOutput();
+  TEST_ASSERT_NOT_EQUAL(std::string::npos, output.find("\"status\":\"ok\""));
+  TEST_ASSERT_NOT_EQUAL(std::string::npos, output.find("\"data\":{\"analog\":{\"a0\":"));
+}
+
 int main(int argc, char** argv) {
   UNITY_BEGIN();
 
@@ -93,6 +208,10 @@ int main(int argc, char** argv) {
   RUN_TEST(test_analog_sampler_invalid_channel);
   RUN_TEST(test_digiin_frequency_and_duty);
   RUN_TEST(test_encoder_generator_steps);
+  RUN_TEST(test_cmdline_status_response_envelope);
+  RUN_TEST(test_cmdline_capabilities_response_lists_commands_and_pins);
+  RUN_TEST(test_cmdline_rejects_out_of_range_pwm_duty);
+  RUN_TEST(test_cmdline_analog_query_uses_response_envelope);
 
   return UNITY_END();
 }

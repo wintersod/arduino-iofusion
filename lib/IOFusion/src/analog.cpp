@@ -26,9 +26,11 @@ void AnalogSampler::onTick() {
 }
 
 void AnalogSampler::sampleIfDue() {
-  if (!_sampleRequested) return;
-  // clear the flag
   noInterrupts();
+  if (!_sampleRequested) {
+    interrupts();
+    return;
+  }
   _sampleRequested = false;
   interrupts();
 

@@ -19,12 +19,25 @@ public:
           const uint8_t* digitalPins,
           uint8_t digitalCount);
 
+  void setModuleStatus(bool analogOk,
+                       bool digiOk,
+                       bool encoderOk,
+                       bool pwmOk,
+                       bool timerOk);
   void processSerial();
 
 private:
+  void printJsonBool(bool value);
+  void beginOkResponse();
+  void endResponse();
+  void respondError(const __FlashStringHelper* code, const __FlashStringHelper* message);
+  void respondOkAck(const __FlashStringHelper* operation);
   void respondAnalog();
   void respondDigital();
   void respondEncoder();
+  void respondStatus();
+  void respondCapabilities();
+  void respondHelp();
   void handleCommand(char* cmd);
   void dispatchCommand();
 
@@ -36,6 +49,11 @@ private:
   uint8_t _analogCount;
   const uint8_t* _digitalPins;
   uint8_t _digitalCount;
+  bool _analogOk = false;
+  bool _digiOk = false;
+  bool _encoderOk = false;
+  bool _pwmOk = false;
+  bool _timerOk = false;
 
   static constexpr size_t kCmdBufferSize = 64;
   static constexpr unsigned long kCmdIdleTimeoutMs = 75;

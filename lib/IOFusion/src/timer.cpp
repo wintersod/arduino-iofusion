@@ -5,12 +5,22 @@ volatile Timer2Callback Timer2Driver::_cbs[Timer2Driver::MAX_CALLBACKS] = { null
 
 Timer2Driver::Timer2Driver() {}
 
+void Timer2Driver::clearCallbacks() {
+  for (uint8_t i = 0; i < MAX_CALLBACKS; ++i) {
+    _cbs[i] = nullptr;
+  }
+}
+
 uint16_t Timer2Driver::beginHz(float freqHz) {
   if (freqHz <= 0) return 0;
   // Stop timer2
   TCCR2A = 0;
   TCCR2B = 0;
   TIMSK2 = 0; // disable interrupts
+
+  noInterrupts();
+  clearCallbacks();
+  interrupts();
 
   const uint32_t F_CPU32 = F_CPU;
   // Timer2 is 8-bit; use CTC mode with OCR2A top (WGM21=1)
@@ -55,20 +65,32 @@ uint16_t Timer2Driver::beginHz(float freqHz) {
 }
 
 void Timer2Driver::stop() {
+  noInterrupts();
   TIMSK2 &= ~_BV(OCIE2A);
   TCCR2A = 0;
   TCCR2B = 0;
+  clearCallbacks();
+  interrupts();
 }
 
-void Timer2Driver::attachCallback(Timer2Callback cb) {
+bool Timer2Driver::attachCallback(Timer2Callback cb) {
+  if (cb == nullptr) return false;
   noInterrupts();
+  for (uint8_t i = 0; i < MAX_CALLBACKS; ++i) {
+    if (_cbs[i] == cb) {
+      interrupts();
+      return true;
+    }
+  }
   for (uint8_t i = 0; i < MAX_CALLBACKS; ++i) {
     if (_cbs[i] == nullptr) {
       _cbs[i] = cb;
-      break;
+      interrupts();
+      return true;
     }
   }
   interrupts();
+  return false;
 }
 
 void Timer2Driver::detachCallback(Timer2Callback cb) {

@@ -82,6 +82,8 @@ void setup() {
   } else {
     timer2.attachCallback(timerTickHandler);
   }
+
+  cmdLine.setModuleStatus(analogOk, digiOk, encoderOk, pwmOk, timerOk);
 }
 
 void loop() {

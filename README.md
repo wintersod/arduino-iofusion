@@ -60,7 +60,12 @@ To keep measurements accurate, `loop()` should run frequently. If the loop stall
 
 ## Command line interface
 
-The firmware exposes a simple serial command line for querying sensors and controlling PWM. Commands are ASCII and return JSON-like responses.
+The firmware exposes a simple serial command line for querying sensors and controlling PWM. Commands are ASCII and return versioned JSON responses.
+
+Response envelope:
+
+- Success: `{"api":"1","status":"ok","data":{...}}`
+- Error: `{"api":"1","status":"error","error":{"code":"...","message":"..."}}`
 
 Supported commands:
 
@@ -69,6 +74,8 @@ Supported commands:
 - `encoder?` — returns encoder direction and position.
 - `pwm-freq <hz>` — sets Timer1 PWM frequency.
 - `pwm-duty <ch> <pct>` — sets PWM duty for channel 0 or 1.
+- `status` — returns module initialization health and channel counts.
+- `capabilities` — returns command list and static interface capabilities.
 - `help` — prints a short help string.
 
 #### Error reporting

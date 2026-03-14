@@ -21,8 +21,49 @@ CmdLine::CmdLine(AnalogSampler& analog,
     _digitalPins(digitalPins),
     _digitalCount(digitalCount) {}
 
+void CmdLine::setModuleStatus(bool analogOk,
+                              bool digiOk,
+                              bool encoderOk,
+                              bool pwmOk,
+                              bool timerOk) {
+  _analogOk = analogOk;
+  _digiOk = digiOk;
+  _encoderOk = encoderOk;
+  _pwmOk = pwmOk;
+  _timerOk = timerOk;
+}
+
+void CmdLine::printJsonBool(bool value) {
+  Serial.print(value ? F("true") : F("false"));
+}
+
+void CmdLine::beginOkResponse() {
+  Serial.print(F("{\"api\":\"1\",\"status\":\"ok\",\"data\":"));
+}
+
+void CmdLine::endResponse() {
+  Serial.println(F("}"));
+}
+
+void CmdLine::respondError(const __FlashStringHelper* code, const __FlashStringHelper* message) {
+  Serial.print(F("{\"api\":\"1\",\"status\":\"error\",\"error\":{\"code\":\""));
+  Serial.print(code);
+  Serial.print(F("\",\"message\":\""));
+  Serial.print(message);
+  Serial.println(F("\"}}"));
+}
+
+void CmdLine::respondOkAck(const __FlashStringHelper* operation) {
+  beginOkResponse();
+  Serial.print(F("{\"operation\":\""));
+  Serial.print(operation);
+  Serial.print(F("\",\"result\":\"ok\"}"));
+  endResponse();
+}
+
 void CmdLine::respondAnalog() {
-  Serial.print(F("{"));
+  beginOkResponse();
+  Serial.print(F("{\"analog\":{"));
   for (uint8_t i = 0; i < _analogCount; ++i) {
     Serial.print(F("\"a"));
     Serial.print(_analogPins[i]);
@@ -30,11 +71,13 @@ void CmdLine::respondAnalog() {
     Serial.print(_analog.getValue(i), 3);
     if (i + 1 < _analogCount) Serial.print(F(","));
   }
-  Serial.println(F("}"));
+  Serial.print(F("}}"));
+  endResponse();
 }
 
 void CmdLine::respondDigital() {
-  Serial.print(F("{"));
+  beginOkResponse();
+  Serial.print(F("{\"digital\":{"));
   for (uint8_t i = 0; i < _digitalCount; ++i) {
     Serial.print(F("\"d"));
     Serial.print(_digitalPins[i]);
@@ -45,15 +88,61 @@ void CmdLine::respondDigital() {
     Serial.print(F("}"));
     if (i + 1 < _digitalCount) Serial.print(F(","));
   }
-  Serial.println(F("}"));
+  Serial.print(F("}}"));
+  endResponse();
 }
 
 void CmdLine::respondEncoder() {
+  beginOkResponse();
   Serial.print(F("{\"encoder\":{\"direction\":\""));
   Serial.print(_encoder.getDirection() ? F("UP") : F("DOWN"));
   Serial.print(F("\",\"position\":"));
   Serial.print(_encoder.getPosition());
-  Serial.println(F("}}"));
+  Serial.print(F("}}"));
+  endResponse();
+}
+
+void CmdLine::respondStatus() {
+  beginOkResponse();
+  Serial.print(F("{\"modules\":{"));
+  Serial.print(F("\"analog\":"));
+  printJsonBool(_analogOk);
+  Serial.print(F(",\"digital\":"));
+  printJsonBool(_digiOk);
+  Serial.print(F(",\"encoder\":"));
+  printJsonBool(_encoderOk);
+  Serial.print(F(",\"pwm\":"));
+  printJsonBool(_pwmOk);
+  Serial.print(F(",\"timer2\":"));
+  printJsonBool(_timerOk);
+  Serial.print(F("},\"counts\":{\"analog\":"));
+  Serial.print(_analogCount);
+  Serial.print(F(",\"digital\":"));
+  Serial.print(_digitalCount);
+  Serial.print(F("}}"));
+  endResponse();
+}
+
+void CmdLine::respondCapabilities() {
+  beginOkResponse();
+  Serial.print(F("{\"commands\":[\"analog?\",\"digital?\",\"encoder?\",\"pwm-freq\",\"pwm-duty\",\"status\",\"capabilities\",\"help\"],\"pwm\":{\"channels\":2,\"duty_range_pct\":[0,100]},\"pins\":{\"analog\":["));
+  for (uint8_t i = 0; i < _analogCount; ++i) {
+    Serial.print(_analogPins[i]);
+    if (i + 1 < _analogCount) Serial.print(F(","));
+  }
+  Serial.print(F("],\"digital\":["));
+  for (uint8_t i = 0; i < _digitalCount; ++i) {
+    Serial.print(_digitalPins[i]);
+    if (i + 1 < _digitalCount) Serial.print(F(","));
+  }
+  Serial.print(F("]}}"));
+  endResponse();
+}
+
+void CmdLine::respondHelp() {
+  beginOkResponse();
+  Serial.print(F("{\"usage\":\"analog? | digital? | encoder? | pwm-freq <hz> | pwm-duty <ch> <pct> | status | capabilities | help\"}"));
+  endResponse();
 }
 
 void CmdLine::handleCommand(char* cmd) {
@@ -90,58 +179,74 @@ void CmdLine::handleCommand(char* cmd) {
 
   if (strcmp(tokens[0], "pwm-freq") == 0) {
     if (tokenCount < 2) {
-      Serial.println(F("{\"error\":\"missing frequency\"}"));
+      respondError(F("missing_frequency"), F("missing frequency"));
       return;
     }
     char* endp = nullptr;
     double freqVal = strtod(tokens[1], &endp);
     if (endp == tokens[1] || *endp != '\0' || freqVal <= 0.0) {
-      Serial.println(F("{\"error\":\"invalid frequency\"}"));
+      respondError(F("invalid_frequency"), F("invalid frequency"));
       return;
     }
     float freq = static_cast<float>(freqVal);
     if (_pwm.begin(freq)) {
-      Serial.println(F("{\"status\":\"ok\"}"));
+      _pwmOk = true;
+      respondOkAck(F("pwm-freq"));
     } else {
-      Serial.println(F("{\"error\":\"unable to set frequency\"}"));
+      _pwmOk = false;
+      respondError(F("pwm_frequency_set_failed"), F("unable to set frequency"));
     }
     return;
   }
 
   if (strcmp(tokens[0], "pwm-duty") == 0) {
     if (tokenCount < 3) {
-      Serial.println(F("{\"error\":\"missing duty parameters\"}"));
+      respondError(F("missing_duty_parameters"), F("missing duty parameters"));
       return;
     }
     char* endp = nullptr;
     long channelVal = strtol(tokens[1], &endp, 10);
     if (endp == tokens[1] || *endp != '\0') {
-      Serial.println(F("{\"error\":\"invalid channel\"}"));
+      respondError(F("invalid_channel"), F("invalid channel"));
       return;
     }
     int channel = static_cast<int>(channelVal);
     if (channel < 0 || channel > 1) {
-      Serial.println(F("{\"error\":\"invalid channel\"}"));
+      respondError(F("invalid_channel"), F("invalid channel"));
       return;
     }
     endp = nullptr;
     double dutyVal = strtod(tokens[2], &endp);
     if (endp == tokens[2] || *endp != '\0') {
-      Serial.println(F("{\"error\":\"invalid duty\"}"));
+      respondError(F("invalid_duty"), F("invalid duty"));
+      return;
+    }
+    if (dutyVal < 0.0 || dutyVal > 100.0) {
+      respondError(F("duty_out_of_range"), F("duty must be in range 0..100"));
       return;
     }
     float duty = static_cast<float>(dutyVal);
     _pwm.setDuty(static_cast<uint8_t>(channel), duty);
-    Serial.println(F("{\"status\":\"ok\"}"));
+    respondOkAck(F("pwm-duty"));
+    return;
+  }
+
+  if (strcmp(tokens[0], "status") == 0) {
+    respondStatus();
+    return;
+  }
+
+  if (strcmp(tokens[0], "capabilities") == 0) {
+    respondCapabilities();
     return;
   }
 
   if (strcmp(tokens[0], "help") == 0) {
-    Serial.println(F("{\"help\":\"analog? digital? encoder? pwm-freq <hz> pwm-duty <ch> <pct>\"}"));
+    respondHelp();
     return;
   }
 
-  Serial.println(F("{\"error\":\"unknown command\"}"));
+  respondError(F("unknown_command"), F("unknown command"));
 }
 
 void CmdLine::dispatchCommand() {

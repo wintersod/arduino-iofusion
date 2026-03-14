@@ -17,7 +17,7 @@ public:
 
 	// Attach a callback that will be called from the ISR context.
 	// Keep the callback short; heavy work should be deferred to loop().
-	void attachCallback(Timer2Callback cb);
+	bool attachCallback(Timer2Callback cb);
 	// Detach a specific callback previously attached. Pass the same function pointer.
 	void detachCallback(Timer2Callback cb);
 	// ISR entry point
@@ -27,6 +27,7 @@ private:
 	// internal state accessed from ISR
 	static const uint8_t MAX_CALLBACKS = 4;
 	static volatile Timer2Callback _cbs[MAX_CALLBACKS];
+	static void clearCallbacks();
 	// helper functions removed; implementation chooses prescaler directly
 };
 
