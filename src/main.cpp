@@ -63,6 +63,7 @@ namespace {
 
   constexpr uint8_t kAnalogPins[] = {0, 1, 2, 3, 4, 5};
   constexpr uint8_t kDigitalPins[] = {2, 3, 8, 11, 12, 13};
+  // Encoder control pins 6/7 assume a push-pull source that drives LOW when idle.
 
   const RuntimeConfig kRuntimeConfig = {
     {kAnalogPins, static_cast<uint8_t>(sizeof(kAnalogPins) / sizeof(kAnalogPins[0])),

@@ -12,6 +12,9 @@ namespace IOFusion {
 /**
  * @brief Generates a quadrature-style output waveform from two active-high control inputs.
  * @note This class is a signal generator, not a physical quadrature decoder.
+ * @note The control inputs are intended to be driven by push-pull logic that actively
+ * drives LOW when idle and HIGH when asserted. They are not intended for passive switches
+ * or open-drain/open-collector sources wired in the usual INPUT_PULLUP style.
  */
 class QuadratureSignalGenerator {
 public:
@@ -21,6 +24,8 @@ public:
 	 * @param pinB Quadrature output B.
 	 * @param up Active-high control input for forward stepping.
 	 * @param down Active-high control input for reverse stepping.
+	 * @note Both control inputs enable Arduino internal pull-ups, so the external source
+	 * must still drive a defined LOW level when idle if active-high semantics are required.
 	 * @retval true Pins were configured successfully.
 	 * @retval false Any pin is invalid or cannot be mapped to a port register.
 	 */

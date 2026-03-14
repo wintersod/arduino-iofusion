@@ -16,6 +16,10 @@ IOFusion is a small set of hardware helpers focused on small-footprint, timer-dr
 
 `QuadratureSignalGenerator` is a **signal generator** driven by two active-high control inputs (`up`, `down`) with internal pull-ups enabled. It advances one quadrature step per tick when `up` is asserted HIGH and `down` is idle LOW, and steps backward when `down` is asserted HIGH and `up` is idle LOW. It does **not** decode a physical quadrature encoder.
 
+Integration requirement: these control inputs are intended for push-pull logic sources that actively drive LOW when idle and HIGH when asserted. They are not intended for passive buttons, open-drain, or open-collector wiring in the usual Arduino `INPUT_PULLUP` pattern.
+
+If your upstream source cannot actively drive LOW when idle, do not wire it directly to this interface as currently defined. In that case, either add an external buffer/translator that presents a push-pull active-high signal to the Uno, or change the firmware contract to active-low semantics.
+
 Direction and position are intentionally treated as lightweight status values rather than an atomic snapshot pair. For this design that is acceptable because the generator is expected to move relatively slowly, so hosts should treat encoder reporting as near-real-time status.
 
 ### Data flow
@@ -108,12 +112,9 @@ Supported commands:
 High-rate sensor responses use compact integer units to reduce serial traffic and avoid float formatting overhead on AVR:
 
 - `analog?` payload: `mv` in millivolts, ordered by configured analog pin list
+- Note: `analog?` reports the latest completed snapshot. Immediately after boot, that snapshot may still be the initial zero-filled state until the first scheduled analog refresh completes.
 - `digital?` payload: `f` in $0.1\,\text{Hz}$ and `d` in $0.1\%$, ordered by configured digital pin list
-- `encoder?` payload: `e` as `[dir, pos]` where `dir` is `1` for up and `0` for down
-
-`analog?` reports the latest completed snapshot. Immediately after boot, that snapshot may still be the initial zero-filled state until the first scheduled analog refresh completes.
-
-`encoder?` is a compact status query. The two values are read separately and are not documented as a transactional snapshot.
+- `encoder?` payload: `e` as `[dir, pos]` where `dir` is `1` for up and `0` for down. This is a compact status query, and the two values are read separately rather than documented as a transactional snapshot.
 - `status` payload: `m` as `[analog,digital,encoder,pwm,timer]` and `c` as `[analogCount,digitalCount]`
 - `capabilities` payload: `cmd` command list, `u` unit list, `p` PWM summary, `a` analog pins, `d` digital pins
 
