@@ -4,7 +4,7 @@ Basic PlatformIO project targeting the Arduino Uno (ATmega328P).
 
 ## IOFusion design
 
-IOFusion is a small set of hardware helpers focused on deterministic, timer-driven sampling and signal generation:
+IOFusion is a small set of hardware helpers focused on small-footprint, timer-driven signal processing and generation:
 
 - `AvrTimer2Scheduler` provides a periodic ISR tick for scheduling fast tasks.
 - `AnalogSampler` defers ADC reads to `loop()` while the ISR only sets a flag.
@@ -14,7 +14,9 @@ IOFusion is a small set of hardware helpers focused on deterministic, timer-driv
 
 ### Encoder generator semantics
 
-`QuadratureSignalGenerator` is a **signal generator** driven by two level inputs (`up`, `down`). It advances one quadrature step per tick when `up` is HIGH and `down` is LOW, and steps backward when `down` is HIGH and `up` is LOW. It does **not** decode a physical quadrature encoder.
+`QuadratureSignalGenerator` is a **signal generator** driven by two active-high control inputs (`up`, `down`) with internal pull-ups enabled. It advances one quadrature step per tick when `up` is asserted HIGH and `down` is idle LOW, and steps backward when `down` is asserted HIGH and `up` is idle LOW. It does **not** decode a physical quadrature encoder.
+
+Direction and position are intentionally treated as lightweight status values rather than an atomic snapshot pair. For this design that is acceptable because the generator is expected to move relatively slowly, so hosts should treat encoder reporting as near-real-time status.
 
 ### Data flow
 
@@ -45,11 +47,13 @@ flowchart TD
 
 #### Timing contract (important)
 
-To keep measurements accurate, `loop()` should run frequently. If the loop stalls for long periods, analog sampling and digital window updates will lag. As a rule of thumb, keep worst-case loop latency well below the digital measurement window duration.
+To keep measurements accurate, `loop()` should run frequently. If the loop stalls for long periods, analog refresh and digital window updates will lag. As a rule of thumb, keep worst-case loop latency well below the digital measurement window duration.
+
+The analog subsystem is intentionally best-effort rather than fixed-rate. Timer ticks only request a refresh, and `loop()` performs ADC work whenever time is available. If multiple ticks arrive while the CPU is busy, those requests are coalesced and only the latest completed analog snapshot is retained.
 
 #### Analog reference voltage
 
-`AnalogSampler` scales readings using a configurable reference voltage (default 5.0V). If your board uses a different $V_{ref}$, set it at startup with `analogSampler.setVref(<volts>)` after `begin()`.
+`AnalogSampler` scales readings using a configurable reference voltage (default 5.0V). If your board uses a different $V_{ref}$, prefer `analogSampler.setVrefMillivolts(<mV>)` at startup after `begin()`. The float-based helper remains available, but the integer API is the better fit for AVR targets.
 
 ### Source layout
 
@@ -73,6 +77,7 @@ Default compact response style:
 
 - Success responses are terse payload objects such as `{"mv":[2502]}` or `{"ok":"pwm-duty"}`
 - Error responses are compact objects such as `{"err":"invalid_frequency"}`
+- Oversized serial frames are discarded until newline and ignored rather than truncated into another command
 
 Debug response style with `IOFUSION_PROTOCOL_DEBUG=1`:
 
@@ -97,6 +102,8 @@ High-rate sensor responses use compact integer units to reduce serial traffic an
 - `analog?` payload: `mv` in millivolts, ordered by configured analog pin list
 - `digital?` payload: `f` in $0.1\,\text{Hz}$ and `d` in $0.1\%$, ordered by configured digital pin list
 - `encoder?` payload: `e` as `[dir, pos]` where `dir` is `1` for up and `0` for down
+
+`encoder?` is a compact status query. The two values are read separately and are not documented as a transactional snapshot.
 - `status` payload: `m` as `[analog,digital,encoder,pwm,timer]` and `c` as `[analogCount,digitalCount]`
 - `capabilities` payload: `cmd` command list, `u` unit list, `p` PWM summary, `a` analog pins, `d` digital pins
 
@@ -126,6 +133,16 @@ Upload to a connected Uno:
 ```bash
 pio run --target upload
 ```
+
+## Doxygen documentation
+
+The public headers and firmware entry points include Doxygen-ready comments. Generate HTML documentation from the repository root with:
+
+```bash
+doxygen Doxyfile
+```
+
+Generated output is written to `docs/doxygen/html/index.html`.
 
 ## Unit tests and coverage
 

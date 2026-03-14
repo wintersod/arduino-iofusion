@@ -1,3 +1,7 @@
+/**
+ * @file iofusion_avr_timer1_pwm.cpp
+ * @brief Implementation of the minimal AVR Timer1 PWM driver.
+ */
 #include "iofusion_avr_timer1_pwm.h"
 
 namespace IOFusion {

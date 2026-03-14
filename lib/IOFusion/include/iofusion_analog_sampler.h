@@ -1,4 +1,7 @@
-// Simple analog sampler for AVR/Arduino
+/**
+ * @file iofusion_analog_sampler.h
+ * @brief Best-effort analog snapshot sampler for AVR-based Arduino boards.
+ */
 #ifndef IOFUSION_ANALOG_SAMPLER_H
 #define IOFUSION_ANALOG_SAMPLER_H
 
@@ -6,25 +9,59 @@
 
 namespace IOFusion {
 
-// Defers ADC reads to loop() and keeps the ISR path to a single pending flag.
+/**
+ * @brief Defers ADC reads to loop() while ISR code only requests a refresh.
+ *
+ * Multiple ISR requests are intentionally coalesced into one pending refresh so the
+ * analog subsystem always publishes the latest available snapshot within the loop budget.
+ */
 class AnalogSampler {
 public:
+	/** @brief Constructs an empty sampler with default 5000 mV reference scaling. */
 	AnalogSampler();
-	// Configure the analog channel list (A0..A5 as 0..5). The channel list is copied.
+	/**
+	 * @brief Configures the analog channel list.
+	 * @param channels Array of analog channel indices using Arduino numbering `A0..A5 -> 0..5`.
+	 * @param count Number of channels in @p channels.
+	 * @retval true Configuration is valid and the channel list was copied.
+	 * @retval false A channel index is invalid or @p count is out of range.
+	 */
 	bool begin(const uint8_t* channels, uint8_t count);
-	// ISR-side request hook. Does not perform ADC reads.
+	/** @brief Requests a future refresh from ISR context without performing ADC reads. */
 	void onTick();
-	// loop()-side sampler. Performs ADC reads only when a request is pending.
+	/**
+	 * @brief Performs a pending analog refresh from loop context.
+	 *
+	 * If loop() falls behind, intermediate requests are coalesced and only the newest
+	 * completed channel snapshot is retained.
+	 */
 	void sampleIfDue();
 
+	/** @brief Returns the configured analog channel count. */
 	uint8_t getChannelCount() const;
-	// Returns the most recent sampled value in millivolts.
+	/**
+	 * @brief Returns the most recent sampled value in millivolts.
+	 * @param idx Channel index inside the configured channel list.
+	 * @return Latest scaled channel value in millivolts, or `0` if @p idx is invalid.
+	 */
 	uint16_t getMilliVolts(uint8_t idx) const;
-	// Returns the most recent sampled voltage in volts.
+	/**
+	 * @brief Returns the most recent sampled value in volts.
+	 * @param idx Channel index inside the configured channel list.
+	 * @return Latest scaled channel value in volts, or `0.0f` if @p idx is invalid.
+	 * @note This helper exists for convenience. The millivolt API is preferred on AVR.
+	 */
 	float getValue(uint8_t idx) const;
-	// Configure reference voltage used for scaling (default 5.0V).
+	/**
+	 * @brief Sets the analog reference voltage used for scaling in floating-point volts.
+	 * @param vref Reference voltage in volts.
+	 * @note The integer millivolt API is preferred on constrained targets.
+	 */
 	void setVref(float vref);
-	// Configure reference voltage directly in millivolts.
+	/**
+	 * @brief Sets the analog reference voltage used for scaling in millivolts.
+	 * @param vrefMillivolts Reference voltage in millivolts.
+	 */
 	void setVrefMillivolts(uint16_t vrefMillivolts);
 
 private:

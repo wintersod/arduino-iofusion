@@ -1,3 +1,7 @@
+/**
+ * @file serial_command_protocol.h
+ * @brief Compact serial command protocol for IOFusion firmware control and status.
+ */
 #ifndef SERIAL_COMMAND_PROTOCOL_H
 #define SERIAL_COMMAND_PROTOCOL_H
 
@@ -14,10 +18,26 @@
 
 namespace IOFusion {
 
-// Compact serial API for sensor queries and PWM control.
-// High-rate responses use integer engineering units to reduce AVR serial and formatting overhead.
+/**
+ * @brief Compact serial API for sensor queries and PWM control.
+ *
+ * High-rate responses use integer engineering units to reduce AVR serial and formatting
+ * overhead. Encoder responses report current direction and position as lightweight status
+ * fields, not as a guaranteed atomic snapshot pair.
+ */
 class SerialCommandProtocol {
 public:
+  /**
+   * @brief Constructs the protocol dispatcher.
+   * @param analog Analog sampler backing the `analog?` query.
+   * @param digi Digital meter backing the `digital?` query.
+   * @param encoder Quadrature generator backing the `encoder?` query.
+   * @param pwm PWM driver backing write commands.
+   * @param analogPins Ordered analog pin list used by protocol metadata.
+   * @param analogCount Number of entries in @p analogPins.
+   * @param digitalPins Ordered digital pin list used by protocol metadata.
+   * @param digitalCount Number of entries in @p digitalPins.
+   */
   SerialCommandProtocol(AnalogSampler& analog,
                         DigitalSignalMeter& digi,
                         QuadratureSignalGenerator& encoder,
@@ -27,13 +47,19 @@ public:
                         const uint8_t* digitalPins,
                         uint8_t digitalCount);
 
-  // Publishes current module health for the status command.
+  /**
+   * @brief Publishes current module health for the `status` command.
+   */
   void setModuleStatus(bool analogOk,
                        bool digiOk,
                        bool encoderOk,
                        bool pwmOk,
                        bool timerOk);
-  // Consumes serial input, parses one-line ASCII commands, and emits compact JSON responses.
+  /**
+   * @brief Consumes serial input and emits responses for any complete commands.
+   *
+   * Oversized frames are discarded until newline rather than truncated into a different command.
+   */
   void processSerial();
 
 private:
@@ -71,6 +97,7 @@ private:
   char _cmdBuffer[kCmdBufferSize] = {0};
   size_t _cmdLength = 0;
   unsigned long _lastByteTimeMs = 0;
+  bool _discardingFrame = false;
 };
 
 } // namespace IOFusion

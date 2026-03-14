@@ -24,3 +24,19 @@ void test_analog_sampler_invalid_channel() {
   const uint8_t channels[] = {6};
   TEST_ASSERT_FALSE(sampler.begin(channels, 1));
 }
+
+void test_analog_sampler_coalesces_pending_refresh_requests() {
+  IOFusion::AnalogSampler sampler;
+  const uint8_t channels[] = {0};
+  TEST_ASSERT_TRUE(sampler.begin(channels, 1));
+
+  mockAnalogValues[0] = 128;
+  sampler.onTick();
+  sampler.onTick();
+  sampler.onTick();
+
+  mockAnalogValues[0] = 900;
+  sampler.sampleIfDue();
+
+  TEST_ASSERT_EQUAL_UINT16(4399, sampler.getMilliVolts(0));
+}

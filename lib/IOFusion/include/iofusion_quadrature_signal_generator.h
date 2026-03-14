@@ -1,4 +1,7 @@
-// Simple quadrature encoder signal generator
+/**
+ * @file iofusion_quadrature_signal_generator.h
+ * @brief Timer-driven quadrature signal generator controlled by two logic inputs.
+ */
 #ifndef IOFUSION_QUADRATURE_SIGNAL_GENERATOR_H
 #define IOFUSION_QUADRATURE_SIGNAL_GENERATOR_H
 
@@ -6,17 +9,38 @@
 
 namespace IOFusion {
 
-// Generates a quadrature-style output from two level inputs. This is not a decoder.
+/**
+ * @brief Generates a quadrature-style output waveform from two active-high control inputs.
+ * @note This class is a signal generator, not a physical quadrature decoder.
+ */
 class QuadratureSignalGenerator {
 public:
-	// pinA/pinB are outputs, up/down are sampled control inputs.
+	/**
+	 * @brief Configures output and control pins.
+	 * @param pinA Quadrature output A.
+	 * @param pinB Quadrature output B.
+	 * @param up Active-high control input for forward stepping.
+	 * @param down Active-high control input for reverse stepping.
+	 * @retval true Pins were configured successfully.
+	 * @retval false Any pin is invalid or cannot be mapped to a port register.
+	 */
 	bool begin(uint8_t pinA, uint8_t pinB, uint8_t up, uint8_t down);
-	// ISR-side state advance and output update.
+	/** @brief Advances the generator one step from ISR context if a control input is asserted. */
 	void onTick();
 
+	/**
+	 * @brief Returns the current accumulated position.
+	 * @note Position and direction are exposed through separate reads and are treated as
+	 * near-real-time status rather than a single atomic snapshot.
+	 */
 	int32_t getPosition();
+	/**
+	 * @brief Returns the most recent direction.
+	 * @retval true Forward direction.
+	 * @retval false Reverse direction.
+	 */
 	bool getDirection();
-	// Resets position and drives both outputs LOW.
+	/** @brief Resets the position counter and drives both outputs low. */
 	void reset();
 
 private:

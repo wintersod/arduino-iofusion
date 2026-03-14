@@ -162,3 +162,29 @@ void test_serial_command_protocol_encoder_query_uses_compact_fields() {
   const std::string& output = Serial.getOutput();
   TEST_ASSERT_NOT_EQUAL(std::string::npos, output.find("\"e\":[1,2]"));
 }
+
+void test_serial_command_protocol_discards_oversized_frame_until_newline() {
+  IOFusion::AnalogSampler analog;
+  IOFusion::DigitalSignalMeter digi;
+  IOFusion::QuadratureSignalGenerator encoder;
+  IOFusion::AvrTimer1Pwm pwm;
+  const uint8_t analogPins[] = {0, 1};
+  const uint8_t digitalPins[] = {2, 3};
+
+  TEST_ASSERT_TRUE(analog.begin(analogPins, 2));
+  TEST_ASSERT_TRUE(digi.begin(digitalPins, 2, 4, 1000.0f, false));
+  TEST_ASSERT_TRUE(encoder.begin(9, 10, 4, 5));
+
+  IOFusion::SerialCommandProtocol cmd(analog, digi, encoder, pwm, analogPins, 2, digitalPins, 2);
+  cmd.setModuleStatus(true, true, true, true, true);
+
+  std::string oversized(80, 'x');
+  oversized += "\nstatus\n";
+  Serial.setInput(oversized);
+  cmd.processSerial();
+
+  const std::string& output = Serial.getOutput();
+  TEST_ASSERT_EQUAL(std::string::npos, output.find("unknown_command"));
+  TEST_ASSERT_EQUAL(std::string::npos, output.find("\"err\":"));
+  TEST_ASSERT_NOT_EQUAL(std::string::npos, output.find("\"m\":[1,1,1,1,1]"));
+}

@@ -1,3 +1,7 @@
+/**
+ * @file iofusion_analog_sampler.cpp
+ * @brief Implementation of the best-effort analog snapshot sampler.
+ */
 #include "iofusion_analog_sampler.h"
 
 namespace IOFusion {

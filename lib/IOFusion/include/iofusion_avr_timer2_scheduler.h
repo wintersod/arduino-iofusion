@@ -1,4 +1,7 @@
-// Simple Timer2 driver for AVR/Arduino
+/**
+ * @file iofusion_avr_timer2_scheduler.h
+ * @brief Small Timer2 compare-match scheduler for short ISR callbacks.
+ */
 #ifndef IOFUSION_AVR_TIMER2_SCHEDULER_H
 #define IOFUSION_AVR_TIMER2_SCHEDULER_H
 
@@ -6,20 +9,32 @@
 
 namespace IOFusion {
 
+/** @brief Function pointer type for Timer2 ISR callbacks. */
 typedef void (*Timer2Callback)();
 
-// Minimal Timer2 compare-match scheduler for short ISR callbacks.
+/** @brief Minimal Timer2 compare-match scheduler for short ISR callbacks. */
 class AvrTimer2Scheduler {
 public:
+	/** @brief Constructs an unconfigured Timer2 scheduler. */
 	AvrTimer2Scheduler();
-	// Starts Timer2 in CTC mode and returns the OCR value used, or 0 on failure.
+	/**
+	 * @brief Starts Timer2 in CTC mode.
+	 * @param freqHz Target callback frequency in hertz.
+	 * @return OCR2A compare value used for the chosen prescaler, or `0` on failure.
+	 */
 	uint16_t beginHz(uint32_t freqHz);
-	// Stops Timer2 and clears registered callbacks.
+	/** @brief Stops Timer2 and clears all registered callbacks. */
 	void stop();
-	// Registers a callback unless the list is full. Duplicate registration is ignored.
+	/**
+	 * @brief Registers a callback unless the list is full.
+	 * @param cb Callback invoked from Timer2 compare-match ISR context.
+	 * @retval true Callback was registered or already present.
+	 * @retval false @p cb is null or the callback table is full.
+	 */
 	bool attachCallback(Timer2Callback cb);
+	/** @brief Removes a previously registered callback if present. */
 	void detachCallback(Timer2Callback cb);
-	// ISR dispatch entry point used by the Timer2 compare-match ISR.
+	/** @brief Dispatch entry used by the Timer2 compare-match ISR. */
 	static void handleInterrupt();
 
 private:

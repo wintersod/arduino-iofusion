@@ -1,3 +1,7 @@
+/**
+ * @file iofusion_quadrature_signal_generator.cpp
+ * @brief Implementation of the timer-driven quadrature signal generator.
+ */
 #include "iofusion_quadrature_signal_generator.h"
 
 namespace IOFusion {
@@ -39,15 +43,15 @@ bool QuadratureSignalGenerator::begin(uint8_t pinA, uint8_t pinB, uint8_t up, ui
 }
 
 void QuadratureSignalGenerator::onTick() {
-  bool upHigh = (_upPortIn && ((*_upPortIn & _upMask) != 0));
-  bool downHigh = (_downPortIn && ((*_downPortIn & _downMask) != 0));
+  bool upActive = (_upPortIn && ((*_upPortIn & _upMask) != 0));
+  bool downActive = (_downPortIn && ((*_downPortIn & _downMask) != 0));
   bool stepped = false;
-  if (upHigh && !downHigh) {
+  if (upActive && !downActive) {
     _directionUp = true;
     _state = (_state + 1) & 3;
     _position++;
     stepped = true;
-  } else if (!upHigh && downHigh) {
+  } else if (!upActive && downActive) {
     _directionUp = false;
     _state = (_state - 1) & 3;
     _position--;

@@ -1,3 +1,7 @@
+/**
+ * @file serial_command_protocol.cpp
+ * @brief Implementation of the compact IOFusion serial protocol.
+ */
 #include "serial_command_protocol.h"
 
 #include <ctype.h>
@@ -343,16 +347,29 @@ void SerialCommandProtocol::processSerial() {
   while (Serial.available() > 0) {
     char c = static_cast<char>(Serial.read());
     if (c == '\r' || c == '\n') {
-      dispatchCommand();
+      if (_discardingFrame) {
+        _discardingFrame = false;
+        _cmdLength = 0;
+        _cmdBuffer[0] = '\0';
+      } else {
+        dispatchCommand();
+      }
       _lastByteTimeMs = 0;
     } else {
+      if (_discardingFrame) {
+        continue;
+      }
       if (_cmdLength < kCmdBufferSize - 1) {
         _cmdBuffer[_cmdLength++] = c;
+      } else {
+        _discardingFrame = true;
+        _cmdLength = 0;
+        _cmdBuffer[0] = '\0';
       }
       _lastByteTimeMs = millis();
     }
   }
-  if (_cmdLength > 0 && _lastByteTimeMs != 0) {
+  if (!_discardingFrame && _cmdLength > 0 && _lastByteTimeMs != 0) {
     unsigned long now = millis();
     if (now - _lastByteTimeMs >= kCmdIdleTimeoutMs) {
       dispatchCommand();

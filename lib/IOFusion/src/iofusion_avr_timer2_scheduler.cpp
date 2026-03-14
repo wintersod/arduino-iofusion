@@ -1,3 +1,7 @@
+/**
+ * @file iofusion_avr_timer2_scheduler.cpp
+ * @brief Implementation of the Timer2 compare-match callback scheduler.
+ */
 #include "iofusion_avr_timer2_scheduler.h"
 
 namespace IOFusion {

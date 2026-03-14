@@ -1,3 +1,7 @@
+/**
+ * @file main.cpp
+ * @brief Arduino firmware composition root for the IOFusion demo application.
+ */
 #include <Arduino.h>
 
 
@@ -10,6 +14,7 @@
 #include "serial_command_protocol.h"
 
 namespace {
+  /** @brief Static analog and digital pin mapping used by the firmware runtime. */
   struct PinMapConfig {
     const uint8_t* analogPins;
     uint8_t analogPinCount;
@@ -17,6 +22,7 @@ namespace {
     uint8_t digitalPinCount;
   };
 
+  /** @brief Static pin configuration for the quadrature signal generator. */
   struct EncoderConfig {
     uint8_t outputPinA;
     uint8_t outputPinB;
@@ -24,17 +30,20 @@ namespace {
     uint8_t inputPinDown;
   };
 
+  /** @brief Timer-related runtime configuration. */
   struct TimingConfig {
     uint32_t timerTickHz;
     uint16_t digitalWindowTicks;
   };
 
+  /** @brief Default PWM configuration applied during startup. */
   struct PwmConfig {
     uint32_t frequencyHz;
     uint8_t channel0DutyPercent;
     uint8_t channel1DutyPercent;
   };
 
+  /** @brief Aggregate firmware configuration stored entirely in static data. */
   struct RuntimeConfig {
     PinMapConfig pins;
     EncoderConfig encoder;
@@ -42,6 +51,7 @@ namespace {
     PwmConfig pwm;
   };
 
+  /** @brief Runtime health bits reported by the serial protocol. */
   struct ModuleHealth {
     bool analog = false;
     bool digital = false;
@@ -61,8 +71,10 @@ namespace {
     {100U, 50U, 25U},
   };
 
+  /** @brief Single static composition root for all firmware modules. */
   class FirmwareRuntime {
   public:
+    /** @brief Builds the runtime around one immutable static configuration block. */
     explicit FirmwareRuntime(const RuntimeConfig& config)
       : _config(config),
         _cmdProtocol(
@@ -75,6 +87,7 @@ namespace {
           _config.pins.digitalPins,
           _config.pins.digitalPinCount) {}
 
+    /** @brief Initializes peripherals, protocol state, and timer-driven modules. */
     void setup() {
       Serial.begin(115200);
       delay(100);
@@ -121,12 +134,14 @@ namespace {
       refreshProtocolStatus();
     }
 
+    /** @brief Services loop-context work that must stay out of the ISR path. */
     void loop() {
       if (_health.analog) _analogSampler.sampleIfDue();
       if (_health.digital) _digitalSignalMeter.updateIfReady();
       _cmdProtocol.processSerial();
     }
 
+    /** @brief Timer2 ISR trampoline target used to fan out periodic work. */
     void onTimerTickIsr() {
       if (_health.analog) _analogSampler.onTick();
       if (_health.digital) _digitalSignalMeter.onTick();
@@ -155,15 +170,18 @@ namespace {
 
   FirmwareRuntime runtime(kRuntimeConfig);
 
+  /** @brief Free-function trampoline attached to Timer2 ISR callback dispatch. */
   void timerTickHandler() {
     runtime.onTimerTickIsr();
   }
 }
 
+/** @brief Arduino setup entry point. */
 void setup() {
   runtime.setup();
 }
 
+/** @brief Arduino main loop entry point. */
 void loop() {
   runtime.loop();
 }

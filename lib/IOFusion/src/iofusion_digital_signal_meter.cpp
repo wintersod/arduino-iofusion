@@ -1,3 +1,7 @@
+/**
+ * @file iofusion_digital_signal_meter.cpp
+ * @brief Implementation of the fixed-point digital signal meter.
+ */
 #include "iofusion_digital_signal_meter.h"
 
 namespace IOFusion {

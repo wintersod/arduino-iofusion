@@ -1,4 +1,7 @@
-// Timer1-based PWM driver for two hardware channels (OC1A / OC1B)
+/**
+ * @file iofusion_avr_timer1_pwm.h
+ * @brief Minimal Timer1 PWM driver for Arduino Uno hardware PWM outputs.
+ */
 #ifndef IOFUSION_AVR_TIMER1_PWM_H
 #define IOFUSION_AVR_TIMER1_PWM_H
 
@@ -6,15 +9,25 @@
 
 namespace IOFusion {
 
-// Minimal AVR Timer1 PWM driver for OC1A/OC1B (Arduino Uno pins 9 and 10).
+/** @brief Minimal AVR Timer1 PWM driver for OC1A/OC1B on Arduino Uno pins 9 and 10. */
 class AvrTimer1Pwm {
 public:
+	/** @brief Constructs an unconfigured Timer1 PWM driver. */
 	AvrTimer1Pwm();
-	// Configures Timer1 for the requested PWM frequency.
+	/**
+	 * @brief Configures Timer1 for the requested PWM frequency.
+	 * @param freqHz Target PWM frequency in hertz.
+	 * @retval true Timer1 was configured successfully.
+	 * @retval false The requested frequency cannot be represented by the Timer1 prescaler/top combination.
+	 */
 	bool begin(uint32_t freqHz);
-	// Sets duty cycle in percent for channel 0 (OC1A) or 1 (OC1B).
+	/**
+	 * @brief Sets duty cycle in percent for one hardware PWM channel.
+	 * @param channel `0` for OC1A, `1` for OC1B.
+	 * @param percent Duty cycle in integer percent. Values above `100` are clamped.
+	 */
 	void setDuty(uint8_t channel, uint8_t percent);
-	// Stops Timer1 PWM and releases the output pins.
+	/** @brief Stops PWM output and releases the Timer1 output pins. */
 	void stop();
 
 private:
