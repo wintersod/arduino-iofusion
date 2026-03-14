@@ -12,6 +12,31 @@ IOFusion is a small set of hardware helpers focused on small-footprint, timer-dr
 - `QuadratureSignalGenerator` produces a quadrature output and tracks position/direction.
 - `AvrTimer1Pwm` configures Timer1 PWM on OC1A/OC1B (pins 9/10) and drives both outputs low when stopped.
 
+### Digital measurement semantics
+
+`DigitalSignalMeter` is intended to observe externally driven push-pull logic only. The monitored pins are measurement inputs, not contact inputs, and they should be driven actively LOW and HIGH by the upstream device.
+
+The runtime default now makes the pull-up policy explicit: digital measurement starts with internal pull-ups disabled (`usePullup = false`). That matches the intended use case of externally driven push-pull sources and avoids silently biasing the observed signal.
+
+Integration requirement: do not connect passive switches, open-drain, open-collector, or otherwise weakly biased sources directly unless the external interface first converts them into a clean push-pull logic signal suitable for AVR digital sampling.
+
+In the current firmware configuration, these channels run with a `10 kHz` sampling tick and a `500`-sample window (`50 ms`). Frequency and duty reporting now use a hybrid strategy: if the current window contains at least three rising edges, the firmware uses the completed periods between the first and last rise in that window to estimate frequency, while duty remains the window average; if edges are sparser than that, it reports both values from the same most recently completed cycle measured between rising edges. This removes the old `20 Hz` quantization floor for slow signals without overstating frequency at the handoff boundary.
+
+Practical capacity with the default window:
+
+- Input type: externally driven push-pull digital logic referenced to the Uno ground
+- Sampling rate: `10 kHz`
+- Reporting window: `50 ms`
+- Update cadence: about `20` reports per second
+- Low-frequency behavior: can report below `20 Hz`, but only after two rising edges have been observed and one complete cycle has been measured
+- Mode handoff: windows with only one or two rising edges stay on the cycle-based estimator; denser windows switch at three or more rises, with frequency computed from completed rise-to-rise periods inside that window
+- Stop detection: a stale frequency is cleared after roughly two expected periods without a new rising edge
+- Duty-cycle behavior: low-rate duty comes from the same last completed cycle as low-rate frequency; denser signals still use the window average
+- Duty-cycle resolution: `0.1%` in the reported value, with accuracy limited by the `100 us` sampling interval
+- Practical frequency range: low single-digit hertz up to about `1 kHz` if you want credible sampled measurements; several kilohertz is theoretically detectable but increasingly phase- and quantization-limited
+
+This design still is not a hardware input-capture meter. Very slow signals need time to accumulate two edges, and very fast signals are limited by the `100 us` sample interval. If you need better than that, use a longer window for smoother duty reporting or move to timestamped edge capture.
+
 ### Encoder generator semantics
 
 `QuadratureSignalGenerator` is a **signal generator** driven by two active-high control inputs (`up`, `down`) with internal pull-ups enabled. It advances one quadrature step per tick when `up` is asserted HIGH and `down` is idle LOW, and steps backward when `down` is asserted HIGH and `up` is idle LOW. It does **not** decode a physical quadrature encoder.
@@ -53,9 +78,21 @@ flowchart TD
 
 To keep measurements accurate, `loop()` should run frequently. If the loop stalls for long periods, analog refresh and digital window updates will lag. As a rule of thumb, keep worst-case loop latency well below the digital measurement window duration.
 
+On this Uno-focused design, serial command handling is synchronous in `loop()`. If a host polls aggressively, especially with repeated `digital?`, `status`, or `capabilities` requests, command parsing and response formatting can delay when the next digital measurement window is re-armed. For conservative integration, treat about `1` poll per second as the recommended steady-state host query rate unless you have profiled your exact traffic pattern on target hardware.
+
+Higher polling rates can still work in some deployments, but they are not a safe default on an ATmega328P. If you increase the host polling rate, validate that digital measurements do not pause or become stale under worst-case serial traffic.
+
+This polling guidance is intentionally a documented integration contract only. It is not surfaced through `status`, `capabilities`, or any other runtime metadata because the firmware cannot reliably infer or enforce host-side traffic policy on its own.
+
 The analog subsystem is intentionally best-effort rather than fixed-rate. Timer ticks only request a refresh, and `loop()` performs ADC work whenever time is available. If multiple ticks arrive while the CPU is busy, those requests are coalesced and only the latest completed analog snapshot is retained.
 
 In the default firmware configuration, the Timer2 base tick remains `10 kHz` for digital measurement and generator timing, but analog refresh requests are decimated to one request every `100 ms`. This keeps ADC work aligned with the actual freshness requirement instead of requesting unsustainable full-channel refreshes on every timer tick.
+
+The same default Timer2 settings also define the digital measurement capacity: the firmware samples input level every `100 us` and publishes one reduced measurement window every `50 ms`. When that window does not contain enough edges, both frequency and duty fall back to the most recent completed cycle instead of mixing cycle-based frequency with window-based duty.
+
+Sparse stale timeout also tracks ISR tick time even if a completed window is still waiting for loop-side publication. That avoids keeping an old sparse-cycle result alive indefinitely just because the host or main loop delayed the next `updateIfReady()` call.
+
+Because the measurement block is published from `loop()`, not directly from the ISR, host query rate matters. Even though the internal window cadence is about `20` updates per second, you should not assume the host should poll anywhere near that rate. A conservative recommendation is about `1` `digital?` query per second on Uno-class hardware unless you have measured headroom on the real device.
 
 At boot, analog values are not refreshed immediately. Hosts should allow for the firmware startup delay plus the first analog refresh interval before treating `analog?` data as fresh. With the default configuration, that means analog readings can remain at their initial zero state for roughly the first `100 ms` after startup.
 
@@ -78,6 +115,8 @@ The firmware entry point uses one static `FirmwareRuntime` composition root in [
 This keeps the top level explicit without adding heap allocation, virtual dispatch, or other abstractions that are expensive on the ATmega328P.
 
 `TimingConfig` now separates the fast Timer2 base rate from the analog refresh cadence, so digital edge timing can stay fast while analog updates are intentionally limited to a realistic freshness target.
+
+Digital measurement defaults are also explicit in the runtime config through `DigitalMeasurementConfig`, which currently sets the reporting window and whether internal pull-ups are enabled for measured inputs.
 
 Timer2 scheduler setup is reported as explicit success or failure. The implementation no longer treats `OCR2A = 0` as an error, because that is a valid compare value for the highest representable Timer2 rate.
 
@@ -109,11 +148,15 @@ Supported commands:
 - `capabilities` — returns compact command list, unit metadata, and pin capabilities.
 - `help` — prints a short help string.
 
+Polling-rate guidance is not reported programmatically through `status` or `capabilities`; hosts are expected to follow the documented integration recommendation.
+
 High-rate sensor responses use compact integer units to reduce serial traffic and avoid float formatting overhead on AVR:
 
 - `analog?` payload: `mv` in millivolts, ordered by configured analog pin list
 - Note: `analog?` reports the latest completed snapshot. Immediately after boot, that snapshot may still be the initial zero-filled state until the first scheduled analog refresh completes.
 - `digital?` payload: `f` in $0.1\,\text{Hz}$ and `d` in $0.1\%$, ordered by configured digital pin list
+- Note: `digital?` is intended for externally driven push-pull logic inputs. With the default `10 kHz` tick and `50 ms` window, results still update about every `50 ms`, but low-rate frequency and duty fall back to the most recent completed cycle once two rising edges have been seen.
+- Note: for Uno-class deployments, keep steady-state host polling conservative. About `1` `digital?` request per second is the recommended default; substantially higher request rates can interfere with loop-side measurement publishing and should only be used after target validation.
 - `encoder?` payload: `e` as `[dir, pos]` where `dir` is `1` for up and `0` for down. This is a compact status query, and the two values are read separately rather than documented as a transactional snapshot.
 - `status` payload: `m` as `[analog,digital,encoder,pwm,timer]` and `c` as `[analogCount,digitalCount]`
 - `capabilities` payload: `cmd` command list, `u` unit list, `p` PWM summary, `a` analog pins, `d` digital pins

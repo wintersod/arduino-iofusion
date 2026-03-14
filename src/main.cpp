@@ -33,8 +33,13 @@ namespace {
   /** @brief Timer-related runtime configuration. */
   struct TimingConfig {
     uint32_t timerTickHz;
-    uint16_t digitalWindowTicks;
     uint16_t analogRefreshPeriodMs;
+  };
+
+  /** @brief Digital measurement defaults applied during startup. */
+  struct DigitalMeasurementConfig {
+    uint16_t windowTicks;
+    bool usePullup;
   };
 
   /** @brief Default PWM configuration applied during startup. */
@@ -49,6 +54,7 @@ namespace {
     PinMapConfig pins;
     EncoderConfig encoder;
     TimingConfig timing;
+    DigitalMeasurementConfig digital;
     PwmConfig pwm;
   };
 
@@ -69,7 +75,8 @@ namespace {
     {kAnalogPins, static_cast<uint8_t>(sizeof(kAnalogPins) / sizeof(kAnalogPins[0])),
      kDigitalPins, static_cast<uint8_t>(sizeof(kDigitalPins) / sizeof(kDigitalPins[0]))},
     {4, 5, 6, 7},
-    {10000U, 500, 100},
+    {10000U, 100},
+    {500, false},
     {100U, 50U, 25U},
   };
 
@@ -109,9 +116,9 @@ namespace {
       _health.digital = _digitalSignalMeter.begin(
         _config.pins.digitalPins,
         _config.pins.digitalPinCount,
-        _config.timing.digitalWindowTicks,
+        _config.digital.windowTicks,
         _config.timing.timerTickHz,
-        true);
+        _config.digital.usePullup);
       if (!_health.digital) Serial.println(F("{\"error\":\"digital init failed\"}"));
 
       _health.encoder = _quadratureGenerator.begin(

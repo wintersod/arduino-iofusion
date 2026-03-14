@@ -13,7 +13,13 @@ namespace IOFusion {
  * @brief Measures digital input frequency and duty cycle using ISR-side sampling.
  *
  * Edge and high-time counters are updated from a periodic ISR and reduced to fixed-point
- * engineering units from loop context.
+ * engineering units from loop context. This interface is intended for externally driven
+ * push-pull logic signals, not passive contacts or open-drain/open-collector wiring.
+ * Frequency and duty reporting use a hybrid strategy: sparse signals use the last
+ * completed cycle measured between rising edges, while denser signals use the
+ * current reporting window after at least three rising edges are present in the
+ * active window. In that denser mode, frequency is derived from completed periods
+ * between the first and last rise observed inside the window.
  */
 class DigitalSignalMeter {
 public:
@@ -26,6 +32,14 @@ public:
 	 * @param windowTicks Number of ISR samples per measurement window.
 	 * @param tickHz ISR sampling frequency in hertz.
 	 * @param usePullup When true, enables Arduino internal pull-ups on each monitored pin.
+	 *        This is only appropriate when the upstream source still presents a valid
+	 *        push-pull logic level at the AVR pin.
+	 * @note Low-frequency reporting requires at least two observed rising edges before
+	 *       a period can be established. Sparse stale aging continues to track ISR tick
+	 *       time even if a completed window is still waiting for loop-side publication.
+	 *       Pin state tracking also continues across that publication gap so the next
+	 *       window does not synthesize edges from transitions that happened while
+	 *       counting was intentionally paused.
 	 * @retval true Configuration is valid and monitoring started.
 	 * @retval false Arguments are invalid or any pin cannot be resolved to a port register.
 	 */
@@ -64,6 +78,15 @@ private:
 	volatile uint16_t _edgeCnt[MAX_PINS];
 	volatile uint16_t _highCnt[MAX_PINS];
 	volatile uint8_t _lastState[MAX_PINS];
+	volatile uint32_t _sampleTick = 0;
+	volatile uint32_t _lastRiseTick[MAX_PINS];
+	volatile uint32_t _lastPeriodTicks[MAX_PINS];
+	volatile uint32_t _firstRiseTickInWindow[MAX_PINS];
+	volatile uint32_t _lastRiseTickInWindow[MAX_PINS];
+	volatile uint32_t _highTicksSinceRise[MAX_PINS];
+	volatile uint32_t _lastCycleHighTicks[MAX_PINS];
+	volatile uint8_t _hasRiseTick[MAX_PINS];
+	volatile uint8_t _hasCycle[MAX_PINS];
 	volatile bool _windowReady = false;
 
 	uint32_t _freqDeciHz[MAX_PINS];

@@ -25,6 +25,10 @@ namespace IOFusion {
  * overhead. Encoder responses report current direction and position as lightweight status
  * fields, not as a guaranteed atomic snapshot pair. Analog responses return the latest
  * completed snapshot, which may still be the initialized state during early startup.
+ * Command handling and response emission are synchronous from loop context, so AVR-class
+ * targets should be polled conservatively rather than at the internal measurement cadence.
+ * That polling guidance is a documented integration contract and is not exposed through
+ * protocol metadata such as `status` or `capabilities`.
  */
 class SerialCommandProtocol {
 public:
@@ -60,6 +64,8 @@ public:
    * @brief Consumes serial input and emits responses for any complete commands.
    *
    * Oversized frames are discarded until newline rather than truncated into a different command.
+    * For Uno-class targets, sustained host polling around once per second is the conservative
+    * default recommendation unless higher traffic has been validated on hardware.
    */
   void processSerial();
 

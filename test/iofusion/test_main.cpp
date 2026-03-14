@@ -9,6 +9,12 @@ int main(int argc, char** argv) {
   RUN_TEST(test_analog_sampler_invalid_channel);
   RUN_TEST(test_analog_sampler_coalesces_pending_refresh_requests);
   RUN_TEST(test_digital_signal_meter_frequency_and_duty);
+  RUN_TEST(test_digital_signal_meter_keeps_two_edge_windows_in_cycle_mode);
+  RUN_TEST(test_digital_signal_meter_uses_completed_periods_for_three_edge_windows);
+  RUN_TEST(test_digital_signal_meter_reports_low_frequency_from_period);
+  RUN_TEST(test_digital_signal_meter_clears_stale_frequency_after_missing_edges);
+  RUN_TEST(test_digital_signal_meter_stale_aging_advances_while_window_waits_for_loop);
+  RUN_TEST(test_digital_signal_meter_ignores_edges_that_happened_while_window_was_pending);
   RUN_TEST(test_quadrature_signal_generator_steps);
   RUN_TEST(test_quadrature_signal_generator_steps_backward_on_active_high_down);
   RUN_TEST(test_avr_timer1_pwm_begin_sets_timer_registers);
